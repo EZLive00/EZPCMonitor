@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useHistoryStats } from "../lib/useHistory";
-import { MAX_MS, MIN_MS, PRESETS, intervalLabel, retentionLabel } from "../lib/useSettings";
+import { MAX_MS, MIN_MS, PRESETS } from "../lib/useSettings";
+import { LANGS, useI18n, type Lang } from "../i18n";
 import { bytes } from "../lib/format";
 import type { AppSettings } from "../lib/types";
 
@@ -17,10 +18,10 @@ function secText(ms: number): string {
   return ms % 1000 === 0 ? String(ms / 1000) : (ms / 1000).toFixed(1);
 }
 
-const UNITS: { key: string; secs: number; label: string }[] = [
-  { key: "min", secs: 60, label: "分钟" },
-  { key: "hour", secs: 3600, label: "小时" },
-  { key: "day", secs: 86_400, label: "天" },
+const UNITS: { key: string; secs: number; labelKey: "set.unitMin" | "set.unitHour" | "set.unitDay" }[] = [
+  { key: "min", secs: 60, labelKey: "set.unitMin" },
+  { key: "hour", secs: 3600, labelKey: "set.unitHour" },
+  { key: "day", secs: 86_400, labelKey: "set.unitDay" },
 ];
 
 /** 秒 → 最适合的输入单位，让 86400 显示成「1 天」而不是「24 小时」 */
@@ -38,6 +39,7 @@ function pickUnit(secs: number) {
  * 前端不重复实现规则。
  */
 export function SettingsModal({ settings, update, onClose, onOpenHistory }: Props) {
+  const i = useI18n();
   const { stats, reload } = useHistoryStats();
   const [draftMs, setDraftMs] = useState(secText(settings.intervalMs));
 
@@ -87,16 +89,19 @@ export function SettingsModal({ settings, update, onClose, onOpenHistory }: Prop
     reload();
   };
 
+  /** 当前生效的语言标签：`auto` 时显示系统语言那个选项为选中 */
+  const activeLang: string = settings.language;
+
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <div>
-            <div className="modal-title">设置</div>
-            <div className="modal-sub">所有设置都存在本机，不上传任何数据</div>
+            <div className="modal-title">{i.t("set.title")}</div>
+            <div className="modal-sub">{i.t("set.sub")}</div>
           </div>
           <div className="modal-actions">
-            <button className="modal-close" onClick={onClose} title="关闭（Esc）">
+            <button className="modal-close" onClick={onClose} title={i.t("common.closeEsc")}>
               ×
             </button>
           </div>
@@ -105,11 +110,11 @@ export function SettingsModal({ settings, update, onClose, onOpenHistory }: Prop
         <div className="modal-body">
           {/* ---------------- 监控 ---------------- */}
           <div className="set-group">
-            <div className="set-h">监控</div>
+            <div className="set-h">{i.t("set.group.monitor")}</div>
             <div className="set-row">
               <div className="set-label">
-                采集频率
-                <span>越短越灵敏，越长越省电</span>
+                {i.t("set.freq")}
+                <span>{i.t("set.freqHint")}</span>
               </div>
               <div className="set-ctrl">
                 <div className="freq-opts">
@@ -118,15 +123,15 @@ export function SettingsModal({ settings, update, onClose, onOpenHistory }: Prop
                       key={p.ms}
                       className={`freq-opt${settings.intervalMs === p.ms ? " on" : ""}`}
                       onClick={() => update({ intervalMs: p.ms })}
-                      title={p.hint}
+                      title={`${i.interval(p.ms)} · ${i.t(p.hintKey)}`}
                     >
-                      <b>{p.tier}</b>
-                      <span>{intervalLabel(p.ms)}</span>
+                      <b>{i.t(p.tierKey)}</b>
+                      <span>{i.interval(p.ms)}</span>
                     </button>
                   ))}
                 </div>
                 <div className="inline-input">
-                  <span>自定义</span>
+                  <span>{i.t("common.custom")}</span>
                   <input
                     value={draftMs}
                     onChange={(e) => setDraftMs(e.target.value)}
@@ -137,14 +142,45 @@ export function SettingsModal({ settings, update, onClose, onOpenHistory }: Prop
                     spellCheck={false}
                     className={msValid ? undefined : "bad"}
                   />
-                  <span>秒</span>
+                  <span>{i.t("set.unitSec")}</span>
                   <button
                     className="btn-primary sm"
                     disabled={!msValid}
                     onClick={() => update({ intervalMs: Math.round(ms * 1000) })}
                   >
-                    应用
+                    {i.t("common.apply")}
                   </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ---------------- 通用：语言 ---------------- */}
+          <div className="set-group">
+            <div className="set-h">{i.t("set.group.general")}</div>
+            <div className="set-row">
+              <div className="set-label">
+                {i.t("set.language")}
+                <span>{i.t("set.languageHint")}</span>
+              </div>
+              <div className="set-ctrl">
+                <div className="lang-opts">
+                  <button
+                    className={`lang-opt${activeLang === "auto" ? " on" : ""}`}
+                    onClick={() => update({ language: "auto" })}
+                  >
+                    {i.t("set.langAuto")}
+                  </button>
+                  {LANGS.map((l) => (
+                    <button
+                      key={l.tag}
+                      className={`lang-opt${activeLang === l.tag ? " on" : ""}`}
+                      onClick={() => update({ language: l.tag as Lang })}
+                      lang={l.tag}
+                    >
+                      {l.name}
+                    </button>
+                  ))}
                 </div>
               </div>
             </div>
@@ -153,16 +189,16 @@ export function SettingsModal({ settings, update, onClose, onOpenHistory }: Prop
           {/* ---------------- 历史记录 ---------------- */}
           <div className="set-group">
             <div className="set-h">
-              历史记录
+              {i.t("set.group.history")}
               <button className="set-link" onClick={onOpenHistory}>
-                查看历史 ›
+                {i.t("set.viewHistory")}
               </button>
             </div>
 
             <div className="set-row">
               <div className="set-label">
-                记录历史
-                <span>每 {sampleSecs} 秒一条，与采集频率无关</span>
+                {i.t("set.record")}
+                <span>{i.t("set.recordHint", { n: sampleSecs })}</span>
               </div>
               <div className="set-ctrl right">
                 <button
@@ -178,8 +214,8 @@ export function SettingsModal({ settings, update, onClose, onOpenHistory }: Prop
 
             <div className="set-row">
               <div className="set-label">
-                保留时长
-                <span>超期记录会自动删除</span>
+                {i.t("set.retention")}
+                <span>{i.t("set.retentionHint")}</span>
               </div>
               <div className="set-ctrl">
                 <div className="ret-opts">
@@ -189,13 +225,13 @@ export function SettingsModal({ settings, update, onClose, onOpenHistory }: Prop
                       className={`ret-opt${settings.historyRetentionSecs === p ? " on" : ""}`}
                       onClick={() => update({ historyRetentionSecs: p })}
                     >
-                      <b>{retentionLabel(p)}</b>
+                      <b>{i.retention(p)}</b>
                       <span>{estimate(p)}</span>
                     </button>
                   ))}
                 </div>
                 <div className="inline-input">
-                  <span>自定义</span>
+                  <span>{i.t("common.custom")}</span>
                   <input
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
@@ -213,7 +249,7 @@ export function SettingsModal({ settings, update, onClose, onOpenHistory }: Prop
                       className={`chip tiny${unit === u.key ? " on" : ""}`}
                       onClick={() => setUnit(u.key)}
                     >
-                      {u.label}
+                      {i.t(u.labelKey)}
                     </button>
                   ))}
                   <button
@@ -221,12 +257,15 @@ export function SettingsModal({ settings, update, onClose, onOpenHistory }: Prop
                     disabled={!retentionValid}
                     onClick={() => update({ historyRetentionSecs: retentionSecs })}
                   >
-                    应用
+                    {i.t("common.apply")}
                   </button>
                 </div>
                 {!retentionValid && (
                   <div className="set-note warn">
-                    请填 {retentionLabel(minRetention)} 到 {retentionLabel(maxRetention)} 之间
+                    {i.t("set.range", {
+                      min: i.retention(minRetention),
+                      max: i.retention(maxRetention),
+                    })}
                   </div>
                 )}
               </div>
@@ -234,37 +273,42 @@ export function SettingsModal({ settings, update, onClose, onOpenHistory }: Prop
 
             <div className="set-row">
               <div className="set-label">
-                当前占用
+                {i.t("set.usage")}
                 <span>
                   {stats
-                    ? `${stats.count.toLocaleString()} 条 · 每条约 ${stats.bytesPerRecord} 字节`
-                    : "读取中…"}
+                    ? i.t("set.usageHint", {
+                        count: i.tn("p.records", stats.count),
+                        b: stats.bytesPerRecord,
+                      })
+                    : i.t("common.reading")}
                 </span>
               </div>
               <div className="set-ctrl right">
                 <span className="set-value">{stats ? bytes(stats.bytes) : "—"}</span>
                 <button className="mini" onClick={clearHistory} disabled={!stats || stats.count === 0}>
-                  清空
+                  {i.t("set.clear")}
                 </button>
               </div>
             </div>
 
             {settings.historyEnabled && (
               <div className="set-note">
-                按当前设置，保留 {retentionLabel(settings.historyRetentionSecs)} 约占
-                {" "}
-                {estimate(settings.historyRetentionSecs)}（每 10 秒一条）。
+                {i.t("set.estimate", {
+                  ret: i.retention(settings.historyRetentionSecs),
+                  size: estimate(settings.historyRetentionSecs),
+                  n: sampleSecs,
+                })}
               </div>
             )}
           </div>
 
           {/* ---------------- 关于 ---------------- */}
           <div className="set-group">
-            <div className="set-h">关于</div>
+            <div className="set-h">{i.t("set.group.about")}</div>
             <div className="set-row">
               <div className="set-label">
                 EZPcMonitor
-                <span>Tauri 2 · Rust · 数据全部在本机采集</span>
+                <span>{i.t("set.aboutHint")}</span>
               </div>
               <div className="set-ctrl right">
                 <span className="set-value dim">v0.1.0</span>
@@ -273,9 +317,7 @@ export function SettingsModal({ settings, update, onClose, onOpenHistory }: Prop
           </div>
         </div>
 
-        <div className="modal-foot">
-          改完立即生效，不需要重启。历史文件在应用数据目录下的 history.jsonl，随时可以清空。
-        </div>
+        <div className="modal-foot">{i.t("set.foot")}</div>
       </div>
     </div>
   );

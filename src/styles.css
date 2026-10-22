@@ -12,6 +12,18 @@
     "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
 }
 
+/* 日文/韩文的汉字字形和中文不同（骨、直、来…）。不指定本地字体的话，
+   日文界面会退到中文字形上，一眼就能看出来「这不是日文」。 */
+html:lang(ja) {
+  --font: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN",
+    "Yu Gothic", Meiryo, system-ui, sans-serif;
+}
+
+html:lang(ko) {
+  --font: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic",
+    system-ui, sans-serif;
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -494,15 +506,18 @@ button {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
   font-size: 11.5px;
   color: var(--muted);
   padding: 3px 0;
   font-variant-numeric: tabular-nums;
 }
 
+/* 数值不许折行：`8.1 GB` 断成两行比挤掉一个字母难看多了 */
 .kv b {
   color: var(--text);
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .cores {
@@ -1147,13 +1162,15 @@ button {
 .set-row {
   display: flex;
   align-items: flex-start;
-  gap: 16px;
+  gap: 14px;
   padding: 7px 0;
 }
 
+/* 172px 是按法语/西班牙语留的余量：「Fréquence de collecte」这类标签比中文长得多，
+   146px 会让说明文字挤成三行。中文标签只是多出一点留白，不影响观感。 */
 .set-label {
   flex: none;
-  width: 146px;
+  width: 172px;
   padding-top: 3px;
   font-size: 12px;
   font-weight: 600;
@@ -1302,6 +1319,40 @@ button {
 
 .ret-opt.on span {
   color: rgba(34, 211, 238, 0.75);
+}
+
+/* ---------- 界面语言九宫格 ---------- */
+
+/* 3 × 3：跟随系统 + 七种语言正好铺满，比下拉菜单少一次点击 */
+.lang-opts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.lang-opt {
+  padding: 7px 6px;
+  border-radius: 9px;
+  font-size: 11px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: all 0.14s ease;
+}
+
+.lang-opt:hover {
+  background: rgba(255, 255, 255, 0.11);
+  color: var(--text);
+}
+
+.lang-opt.on {
+  color: var(--accent);
+  background: rgba(34, 211, 238, 0.13);
+  border-color: rgba(34, 211, 238, 0.45);
+  font-weight: 650;
 }
 
 /* ---------- 行内输入 ---------- */

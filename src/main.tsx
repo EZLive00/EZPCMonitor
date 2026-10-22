@@ -7,14 +7,18 @@ import { HistoryModal } from "./components/HistoryModal";
 import { SettingsModal } from "./components/SettingsModal";
 import { useDiskHealth, useMetrics } from "./lib/useMetrics";
 import { useSettings } from "./lib/useSettings";
-import { bytes, rate, tempColor, uptime } from "./lib/format";
+import { initLocale, useI18n } from "./i18n";
+import { bytes, rate, tempColor } from "./lib/format";
 import type { DiskInfo } from "./lib/types";
 import "./styles.css";
+
+initLocale();
 
 export default function Dashboard() {
   const { snap, series, alive } = useMetrics(120);
   const { health, loading, refresh } = useDiskHealth();
   const { settings, update, open: settingsOpen, setOpen: setSettingsOpen } = useSettings();
+  const i = useI18n();
   // 点开的是哪块盘；详情页自己按 mount 去 health 里取最新数据
   const [detail, setDetail] = useState<DiskInfo | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -26,7 +30,7 @@ export default function Dashboard() {
     return (
       <div className="dash" style={{ alignItems: "center", justifyContent: "center" }}>
         <div style={{ color: "var(--muted)", fontSize: 13 }}>
-          {alive ? "正在连接采集内核…" : "未连接到采集内核，请从应用内打开主面板"}
+          {alive ? i.t("dash.connecting") : i.t("dash.disconnected")}
         </div>
       </div>
     );
@@ -42,26 +46,27 @@ export default function Dashboard() {
         <div>
           <div className="dash-title">{snap.host.name}</div>
           <div className="dash-sub">
-            {snap.host.os} · {snap.host.arch} · 已运行 {uptime(snap.uptime)}
+            {snap.host.os} · {snap.host.arch} ·{" "}
+            {i.t("dash.uptime", { v: i.duration(snap.uptime) })}
           </div>
         </div>
         <div className="dash-meta">
-          <div>{snap.cpu.brand || "未知处理器"}</div>
+          <div>{snap.cpu.brand || i.t("dash.cpuUnknown")}</div>
           <div>
-            {snap.cpu.physical} 核 / {snap.cpu.cores} 线程
+            {i.t("dash.cores", { p: snap.cpu.physical, t: snap.cpu.cores })}
             {snap.cpu.freqMhz > 0 ? ` · ${(snap.cpu.freqMhz / 1000).toFixed(2)} GHz` : ""}
           </div>
-          <div>负载 {snap.load.map((l) => l.toFixed(2)).join("  ")}</div>
+          <div>{i.t("dash.load", { v: snap.load.map((l) => l.toFixed(2)).join("  ") })}</div>
         </div>
         <div className="dash-tools">
-          <button className="tool-btn" onClick={() => setHistoryOpen(true)} title="历史记录">
-            历史
+          <button className="tool-btn" onClick={() => setHistoryOpen(true)} title={i.t("hist.title")}>
+            {i.t("dash.history")}
           </button>
           <button
             className={`gear${settingsOpen ? " on" : ""}`}
             onClick={() => setSettingsOpen(!settingsOpen)}
-            title="设置"
-            aria-label="设置"
+            title={i.t("dash.settings")}
+            aria-label={i.t("dash.settings")}
           >
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
               <path
@@ -82,7 +87,7 @@ export default function Dashboard() {
         <div className="card" style={{ gridColumn: "span 5" }}>
           <div className="card-h">
             CPU
-            <span className="tag">实时</span>
+            <span className="tag">{i.t("dash.live")}</span>
           </div>
           <div className="big">
             <span className="num" style={{ color: "#22d3ee" }}>
@@ -100,8 +105,8 @@ export default function Dashboard() {
             />
           </div>
           <div className="cores">
-            {snap.cpu.perCore.map((v, i) => (
-              <div className="core" key={i}>
+            {snap.cpu.perCore.map((v, i2) => (
+              <div className="core" key={i2}>
                 <div className="track">
                   <div className="fill" style={{ height: `${Math.max(4, v)}%` }} />
                 </div>
@@ -114,7 +119,7 @@ export default function Dashboard() {
         {/* ---------------- 内存 ---------------- */}
         <div className="card" style={{ gridColumn: "span 3" }}>
           <div className="card-h">
-            MEMORY
+            {i.t("card.mem")}
             <span className="tag">{bytes(snap.mem.total, 0)}</span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 10 }}>
@@ -123,24 +128,24 @@ export default function Dashboard() {
               value={memPct}
               size={86}
               stroke={7}
-              label="USED"
+              label={i.t("dash.used").toUpperCase()}
               from="#a78bfa"
               to="#6d28d9"
             />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div className="kv">
-                <span>已用</span>
+                <span>{i.t("dash.used")}</span>
                 <b>{bytes(snap.mem.used, 1)}</b>
               </div>
               <div className="kv">
-                <span>可用</span>
+                <span>{i.t("dash.avail")}</span>
                 <b>{bytes(snap.mem.available, 1)}</b>
               </div>
             </div>
           </div>
           <div style={{ marginTop: "auto", paddingTop: 12 }}>
             <div className="kv">
-              <span>交换分区</span>
+              <span>{i.t("dash.swap")}</span>
               <b>
                 {bytes(snap.mem.swapUsed, 1)} / {bytes(snap.mem.swapTotal, 0)}
               </b>
@@ -152,8 +157,8 @@ export default function Dashboard() {
         {/* ---------------- 温度 ---------------- */}
         <div className="card" style={{ gridColumn: "span 4" }}>
           <div className="card-h">
-            TEMPERATURE
-            <span className="tag">{snap.temps.length} 路传感器</span>
+            {i.t("card.temp")}
+            <span className="tag">{i.tn("p.sensors", snap.temps.length)}</span>
           </div>
           <div className="big">
             <span className="num" style={{ color: primary ? tempColor(primary.value) : "var(--muted)" }}>
@@ -189,7 +194,7 @@ export default function Dashboard() {
               </div>
             ))}
             {snap.temps.length === 0 && (
-              <div style={{ fontSize: 11, color: "var(--dim)" }}>当前系统未暴露温度传感器</div>
+              <div style={{ fontSize: 11, color: "var(--dim)" }}>{i.t("dash.noTemp")}</div>
             )}
           </div>
         </div>
@@ -219,19 +224,19 @@ export default function Dashboard() {
               </div>
               <div style={{ marginTop: "auto", paddingTop: 10 }}>
                 <div className="kv">
-                  <span>显存占用</span>
+                  <span>{i.t("dash.vramUsed")}</span>
                   <b>{snap.gpu.memUsed != null ? bytes(snap.gpu.memUsed, 0) : "—"}</b>
                 </div>
                 <div className="kv">
-                  <span>显存上限</span>
-                  <b>{snap.gpu.memTotal != null ? bytes(snap.gpu.memTotal, 0) : "统一内存"}</b>
+                  <span>{i.t("dash.vramTotal")}</span>
+                  <b>{snap.gpu.memTotal != null ? bytes(snap.gpu.memTotal, 0) : i.t("dash.unified")}</b>
                 </div>
               </div>
             </>
           ) : (
             <div className="card-empty">
-              该平台暂未提供 GPU 利用率
-              <span>Windows 端计划通过 LHM / NVML 补齐</span>
+              {i.t("dash.gpuNone")}
+              <span>{i.t("dash.gpuPlan")}</span>
             </div>
           )}
         </div>
@@ -239,10 +244,12 @@ export default function Dashboard() {
         {/* ---------------- 磁盘 ---------------- */}
         <div className="card" style={{ gridColumn: "span 5" }}>
           <div className="card-h">
-            DISK
+            {i.t("card.disk")}
             <span className="tag">
-              <i style={{ background: "#22d3ee" }} />读 {rate(snap.diskTotalReadBps)}
-              <i style={{ background: "#a78bfa", marginLeft: 10 }} />写 {rate(snap.diskTotalWriteBps)}
+              <i style={{ background: "#22d3ee" }} />
+              {i.t("dash.read", { v: rate(snap.diskTotalReadBps) })}
+              <i style={{ background: "#a78bfa", marginLeft: 10 }} />
+              {i.t("dash.write", { v: rate(snap.diskTotalWriteBps) })}
             </span>
           </div>
           <div style={{ overflow: "auto", marginTop: 4, flex: 1, minHeight: 0 }}>
@@ -255,7 +262,7 @@ export default function Dashboard() {
                   className="disk-row clickable"
                   key={d.mount + d.name}
                   onClick={() => setDetail(d)}
-                  title="查看磁盘详情"
+                  title={i.t("dash.diskOpen")}
                 >
                   <div className="disk-top">
                     <span className="disk-name">{d.name}</span>
@@ -291,10 +298,10 @@ export default function Dashboard() {
                       <DiskStatusChip h={h} />
                     ) : (
                       <span className="disk-status dim">
-                        {loading ? "读取健康信息…" : "该磁盘未提供健康信息"}
+                        {loading ? i.t("dash.diskLoading") : i.t("dash.diskNoHealth")}
                       </span>
                     )}
-                    <span className="disk-more">详情 ›</span>
+                    <span className="disk-more">{i.t("dash.diskMore")}</span>
                   </div>
                 </div>
               );
@@ -304,7 +311,7 @@ export default function Dashboard() {
 
         {/* ---------------- 网络 ---------------- */}
         <div className="card" style={{ gridColumn: "span 4" }}>
-          <div className="card-h">NETWORK</div>
+          <div className="card-h">{i.t("card.net")}</div>
           <div style={{ display: "flex", gap: 20, marginTop: 10 }}>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 10, color: "var(--dim)", letterSpacing: "0.1em" }}>DOWN</div>
@@ -336,11 +343,11 @@ export default function Dashboard() {
           </div>
           <div style={{ marginTop: "auto" }}>
             <div className="kv">
-              <span>累计下行</span>
+              <span>{i.t("dash.totalRx")}</span>
               <b>{bytes(snap.net.totalRx, 1)}</b>
             </div>
             <div className="kv">
-              <span>累计上行</span>
+              <span>{i.t("dash.totalTx")}</span>
               <b>{bytes(snap.net.totalTx, 1)}</b>
             </div>
           </div>
@@ -349,31 +356,31 @@ export default function Dashboard() {
         {/* ---------------- 进程 ---------------- */}
         <div className="card" style={{ gridColumn: "span 12", minHeight: 0 }}>
           <div className="card-h">
-            TOP PROCESSES
+            {i.t("card.proc")}
             <span className="sort-tabs">
               <button
                 className={procSort === "cpu" ? "on" : undefined}
                 onClick={() => setProcSort("cpu")}
               >
-                按 CPU
+                {i.t("dash.byCpu")}
               </button>
               <button
                 className={procSort === "mem" ? "on" : undefined}
                 onClick={() => setProcSort("mem")}
               >
-                按内存
+                {i.t("dash.byMem")}
               </button>
             </span>
-            <span className="tag">前 20</span>
+            <span className="tag">{i.t("dash.topN", { n: 20 })}</span>
           </div>
           <div style={{ overflow: "auto", marginTop: 4 }}>
             <table className="proc-table">
               <thead>
                 <tr>
-                  <th style={{ width: 60 }}>PID</th>
-                  <th>进程</th>
+                  <th style={{ width: 60 }}>{i.t("dash.pid")}</th>
+                  <th>{i.t("dash.procName")}</th>
                   <th style={{ width: 80, textAlign: "right" }}>CPU</th>
-                  <th style={{ width: 100, textAlign: "right" }}>内存</th>
+                  <th style={{ width: 100, textAlign: "right" }}>{i.t("dash.memCol")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -395,7 +402,7 @@ export default function Dashboard() {
                 {snap.procs.length === 0 && (
                   <tr>
                     <td colSpan={4} style={{ color: "var(--dim)", paddingTop: 10 }}>
-                      采集中…
+                      {i.t("dash.collecting")}
                     </td>
                   </tr>
                 )}

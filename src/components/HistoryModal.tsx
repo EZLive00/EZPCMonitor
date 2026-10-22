@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { HistoryChart } from "./HistoryChart";
-import { clockLabel, sampleSeries, seriesStats, useHistory, useHistoryStats } from "../lib/useHistory";
+import { sampleSeries, seriesStats, useHistory, useHistoryStats } from "../lib/useHistory";
+import { useI18n, type Key } from "../i18n";
 import { bytes, rate } from "../lib/format";
-import { retentionLabel } from "../lib/useSettings";
 import type { HistPoint } from "../lib/types";
 
 interface Props {
@@ -15,24 +15,20 @@ interface Props {
 /** 可选时间窗：1 小时 / 6 小时 / 24 小时 / 7 天 / 30 天 */
 const RANGES = [3600, 21_600, 86_400, 604_800, 2_592_000];
 
-function rangeLabel(secs: number | null): string {
-  return secs == null ? "全部" : retentionLabel(secs);
-}
-
 type Metric = {
   key: keyof HistPoint;
-  title: string;
+  titleKey: Key;
   color: string;
   fmt: (v: number) => string;
 };
 
 const METRICS: Metric[] = [
-  { key: "cpu", title: "CPU", color: "#22d3ee", fmt: (v) => `${v.toFixed(0)}%` },
-  { key: "mem", title: "内存", color: "#a78bfa", fmt: (v) => `${v.toFixed(0)}%` },
-  { key: "temp", title: "温度", color: "#fbbf24", fmt: (v) => `${v.toFixed(0)}°C` },
-  { key: "rx", title: "网络 下行", color: "#38bdf8", fmt: (v) => rate(v) },
-  { key: "disk", title: "磁盘 IO", color: "#34d399", fmt: (v) => rate(v) },
-  { key: "gpu", title: "GPU", color: "#c084fc", fmt: (v) => `${v.toFixed(0)}%` },
+  { key: "cpu", titleKey: "hist.mCpu", color: "#22d3ee", fmt: (v) => `${v.toFixed(0)}%` },
+  { key: "mem", titleKey: "hist.mMem", color: "#a78bfa", fmt: (v) => `${v.toFixed(0)}%` },
+  { key: "temp", titleKey: "hist.mTemp", color: "#fbbf24", fmt: (v) => `${v.toFixed(0)}°C` },
+  { key: "rx", titleKey: "hist.mRx", color: "#38bdf8", fmt: (v) => rate(v) },
+  { key: "disk", titleKey: "hist.mDisk", color: "#34d399", fmt: (v) => rate(v) },
+  { key: "gpu", titleKey: "hist.mGpu", color: "#c084fc", fmt: (v) => `${v.toFixed(0)}%` },
 ];
 
 /**
@@ -42,6 +38,7 @@ const METRICS: Metric[] = [
  * 不如干脆不给他这个选项。
  */
 export function HistoryModal({ retentionSecs, enabled, onClose, onOpenSettings }: Props) {
+  const i = useI18n();
   const options = RANGES.filter((r) => r <= retentionSecs);
   const [range, setRange] = useState<number | null>(
     options.length ? options[options.length - 1] : null,
@@ -65,7 +62,7 @@ export function HistoryModal({ retentionSecs, enabled, onClose, onOpenSettings }
     if (rows.length < 2) return ["", "", ""];
     const first = rows[0].t;
     const last = rows[rows.length - 1].t;
-    return [first, Math.round((first + last) / 2), last].map((t) => clockLabel(t, withDate));
+    return [first, Math.round((first + last) / 2), last].map((t) => i.clock(t, withDate));
   })();
 
   return (
@@ -73,15 +70,19 @@ export function HistoryModal({ retentionSecs, enabled, onClose, onOpenSettings }
       <div className="modal wide" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <div>
-            <div className="modal-title">历史记录</div>
+            <div className="modal-title">{i.t("hist.title")}</div>
             <div className="modal-sub">
               {stats
-                ? `${stats.count.toLocaleString()} 条 · 占用 ${bytes(stats.bytes)} · 保留 ${retentionLabel(retentionSecs)}`
-                : "正在读取…"}
+                ? i.t("hist.sub", {
+                    count: i.tn("p.records", stats.count),
+                    size: bytes(stats.bytes),
+                    ret: i.retention(retentionSecs),
+                  })
+                : i.t("common.reading")}
             </div>
           </div>
           <div className="modal-actions">
-            <button className="modal-close" onClick={onClose} title="关闭（Esc）">
+            <button className="modal-close" onClick={onClose} title={i.t("common.closeEsc")}>
               ×
             </button>
           </div>
@@ -90,10 +91,10 @@ export function HistoryModal({ retentionSecs, enabled, onClose, onOpenSettings }
         <div className="modal-body">
           {!enabled && rows.length === 0 ? (
             <div className="hist-empty">
-              <b>历史记录未开启</b>
-              <span>开启后每 10 秒记一条，之后就能在这里回溯过去的状态。</span>
+              <b>{i.t("hist.off")}</b>
+              <span>{i.t("hist.offHint", { n: stats?.sampleSecs ?? 10 })}</span>
               <button className="btn-primary" onClick={onOpenSettings}>
-                去设置里开启
+                {i.t("hist.enable")}
               </button>
             </div>
           ) : (
@@ -105,24 +106,26 @@ export function HistoryModal({ retentionSecs, enabled, onClose, onOpenSettings }
                     className={`chip${range === r ? " on" : ""}`}
                     onClick={() => setRange(r)}
                   >
-                    {rangeLabel(r)}
+                    {i.retention(r)}
                   </button>
                 ))}
                 <button
                   className={`chip${range === null ? " on" : ""}`}
                   onClick={() => setRange(null)}
                 >
-                  {rangeLabel(null)}
+                  {i.t("hist.all")}
                 </button>
                 <span className="hist-hint">
-                  {loading ? "读取中…" : `${rows.length.toLocaleString()} 个采样点`}
+                  {loading
+                    ? i.t("common.reading")
+                    : i.tn("p.points", rows.length)}
                 </span>
               </div>
 
               {rows.length === 0 && !loading ? (
                 <div className="hist-empty">
-                  <b>这个时间窗里还没有数据</b>
-                  <span>每 10 秒记一条，开着程序等一会儿就有了。</span>
+                  <b>{i.t("hist.empty")}</b>
+                  <span>{i.t("hist.emptyHint", { n: stats?.sampleSecs ?? 10 })}</span>
                 </div>
               ) : (
                 <div className="hist-grid">
@@ -133,9 +136,10 @@ export function HistoryModal({ retentionSecs, enabled, onClose, onOpenSettings }
                     return (
                       <div className="hist-card" key={m.key}>
                         <div className="hist-card-h">
-                          {m.title}
+                          {i.t(m.titleKey)}
                           <span>
-                            峰值 <b>{m.fmt(s.max)}</b> · 均值 {m.fmt(s.avg)}
+                            {i.t("hist.peak")} <b>{m.fmt(s.max)}</b> · {i.t("hist.avg")}{" "}
+                            {m.fmt(s.avg)}
                           </span>
                         </div>
                         <HistoryChart
@@ -153,10 +157,7 @@ export function HistoryModal({ retentionSecs, enabled, onClose, onOpenSettings }
           )}
         </div>
 
-        <div className="modal-foot">
-          每 10 秒记录一条（与采集频率无关）· 实线是区间内峰值，阴影是均值 ·
-          数据只存在本机
-        </div>
+        <div className="modal-foot">{i.t("hist.foot", { n: stats?.sampleSecs ?? 10 })}</div>
       </div>
     </div>
   );

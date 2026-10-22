@@ -352,11 +352,12 @@ macOS 的 `ioreg` 方案已在本项目实现并验证可用（Apple M 系列返
 | `set_want_procs` | `on: bool` | — | 按需采集进程 |
 | `disk_health` | `force?: bool` | `DiskHealth[]` | 硬盘 SMART，60s 缓存，`force` 跳过缓存 |
 | `disk_bench` | `mount, sizeMb?` | `BenchResult` | 顺序读写测速（async，几秒级 IO） |
-| `get_settings` | — | `Settings` | 采集间隔 + 历史开关 + 保留时长 |
+| `get_settings` | — | `Settings` | 采集间隔 + 历史开关 + 保留时长 + 界面语言 |
 | `update_settings` | `patch` | `Settings` | 只传要改的项；夹取 → 落盘 → 广播 `settings:changed` → 刷新托盘 |
 | `history_stats` | — | `HistoryStats` | 条数、占用、实测每条字节数、时间跨度、各档预设 |
 | `history_range` | `from?: u64` | `Point[]` | 取历史点，缺省按保留时长 |
 | `clear_history` | — | — | 删掉历史文件 |
+| `get_locale` | — | `string` | 系统语言标签（`zh-CN` / `en` / …），仅供「跟随系统」显示 |
 | `take_open_settings` | — | `bool` | 托盘点了「设置…」时，前端启动后取一次标记并清除 |
 | `set_widget_mode` | `mode: "card"\|"bar"` | — | 同时调整窗口尺寸 |
 | `set_click_through` | `on: bool` | `bool` | 鼠标穿透 |
@@ -371,6 +372,39 @@ macOS 的 `ioreg` 方案已在本项目实现并验证可用（Apple M 系列返
 | `metrics:tick` | widget / main | `Snapshot` | 每拍一次；主面板不可见时不推 |
 | `settings:changed` | 全部 | `Settings` | 任一设置变更，所有窗口一起同步 |
 | `settings:open` | main | — | 托盘点了「设置…」，让设置弹窗展开 |
+
+### 7.4 Settings 与多语言
+
+`settings.json`（应用配置目录，本机、不上传）：
+
+```json
+{
+  "intervalMs": 5000,
+  "historyEnabled": true,
+  "historyRetentionSecs": 86400,
+  "language": "auto"
+}
+```
+
+`language` 取 `auto` 或七个标签之一：`zh-CN` `zh-TW` `en` `ja` `ko` `fr` `es`。
+`auto` 由后端解析成具体语言（`sys-locale`，`EZPCM_LANG` 可覆盖），
+前端拿到的永远是解析后的结果，两边不会各算一次。
+
+界面文案分两处，界限是「谁能渲染它」：
+
+| 位置 | 内容 | 文件 |
+|---|---|---|
+| 前端 | 主面板 / 悬浮窗 / 三个弹窗的全部文案 | `src/i18n/*.ts`（七份字典） |
+| 原生 | 托盘菜单、窗口标题、SMART 属性表 | `src-tauri/src/i18n.rs`（七张表） |
+
+`zh-CN.ts` 是唯一基准，`Dict` 类型由它推导，其余六份标注 `const strings: Dict`：
+少一条键就是编译错误。前端用 `useI18n()`（模块级 store + `useSyncExternalStore`，
+不用 Context——主面板和悬浮窗是两个独立 React root），
+数字和日期走 `Intl`，复数用 `[单数, 复数]` 二元组。
+
+SMART 属性表刻意只做中英两种：`Percentage Used` 这类名字在 smartctl / CrystalDiskInfo
+里本来就是英文，硬翻反而对不上号。语言变更时后端会清掉 `diskhealth` 的缓存，
+否则会看到一门语言的界面配另一门语言的表格（缓存里存的是格式化好的字符串）。
 
 ---
 
@@ -389,12 +423,17 @@ EZPcMonitor/
 │   ├── components/SettingsModal.tsx  设置弹窗（监控 / 历史 / 关于）
 │   ├── components/HistoryModal.tsx   历史回溯（时间窗 + 多指标曲线）
 │   ├── components/HistoryChart.tsx   带刻度与时间轴的历史曲线
+│   ├── i18n/
+│   │   ├── zh-CN.ts        基准字典（Key 类型由它推导，其余六份必须对齐）
+│   │   ├── zh-TW / en / ja / ko / fr / es.ts
+│   │   ├── types.ts        Dict / Plurals 类型
+│   │   └── index.ts        查表 + 插值 + 单复数 + 数字日期格式化 + 语言 store
 │   ├── lib/
 │   │   ├── types.ts        Snapshot 类型（与 Rust 结构体一一对应）
 │   │   ├── useMetrics.ts   事件订阅 Hook + useDiskHealth
 │   │   ├── useSettings.ts  设置镜像 + 弹层关闭逻辑
 │   │   ├── useHistory.ts   历史拉取 + 分桶降采样
-│   │   └── format.ts       bytes / bytesSI / rate / uptime / 阈值配色
+│   │   └── format.ts       bytes / bytesSI / rate / 阈值配色
 │   └── styles.css          设计系统 + 两套页面样式
 ├── src-tauri/
 │   ├── src/
@@ -404,6 +443,7 @@ EZPcMonitor/
 │   │   ├── bench.rs        顺序读写测速（fsync + 绕 page cache）
 │   │   ├── settings.rs     本地设置持久化（settings.json）
 │   │   ├── history.rs      历史记录（JSONL 追加写 + 按保留时长修剪）
+│   │   ├── i18n.rs         原生侧文案（托盘 / 窗口标题 / SMART 属性名）
 │   │   └── gpu.rs          GPU provider（mac/linux）
 │   ├── resources/bin/      自带的 smartctl + GPL 许可证
 │   ├── tauri.conf.json
@@ -466,7 +506,9 @@ steps:
 - [x] 落盘到 `settings.json`，启动先读再起采集线程
 - [x] 历史记录：10 秒一条、JSONL、按保留时长修剪、默认关闭（ADR-011）
 - [x] 历史回溯弹窗：时间窗切换 + 六项指标曲线 + 峰值/均值
-- [ ] 更多设置项（开机自启 / 主题 / 语言 / 告警阈值）
+- [x] 多语言：简中 / 繁中 / 英 / 日 / 韩 / 法 / 西，默认跟随系统（ADR-013）
+- [x] 托盘菜单、窗口标题、SMART 属性表同步切换语言
+- [ ] 更多设置项（开机自启 / 主题 / 告警阈值）
 
 ### 磁盘工具（进行中）
 - [x] 磁盘健康 / 寿命 / 完整 SMART 属性表（`diskhealth.rs`）
@@ -488,7 +530,7 @@ steps:
 - [ ] 温度权限引导（Windows 管理员模式 + LHM sidecar）
 - [ ] 悬浮窗位置/尺寸持久化，多显示器 DPI 处理
 - [ ] 阈值告警（温度 > 90°C 变色 / 系统通知）
-- [ ] 主题（深/浅/跟随系统）、透明度调节
+- [ ] 浅色主题（跟随系统 / 手动切换）
 - [ ] 全局快捷键（显示/隐藏/切换形态）
 - [ ] 历史数据导出 CSV
 

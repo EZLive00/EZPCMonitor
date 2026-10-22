@@ -8,31 +8,19 @@ export const MIN_MS = 500;
 export const MAX_MS = 60_000;
 export const DEFAULT_MS = 1000;
 
-/** 三档预设：高 / 中 / 低 */
-export const PRESETS: { tier: string; ms: number; hint: string }[] = [
-  { tier: "高", ms: 1000, hint: "1 秒，最灵敏" },
-  { tier: "中", ms: 5000, hint: "5 秒，均衡" },
-  { tier: "低", ms: 10_000, hint: "10 秒，最省电" },
+/** 三档预设：高 / 中 / 低。文案走 i18n，这里只留键名。 */
+export const PRESETS: { tierKey: "set.tierHigh" | "set.tierMid" | "set.tierLow"; hintKey: "set.freqMost" | "set.freqBalanced" | "set.freqSaver"; ms: number }[] = [
+  { tierKey: "set.tierHigh", hintKey: "set.freqMost", ms: 1000 },
+  { tierKey: "set.tierMid", hintKey: "set.freqBalanced", ms: 5000 },
+  { tierKey: "set.tierLow", hintKey: "set.freqSaver", ms: 10_000 },
 ];
 
 export const FALLBACK: AppSettings = {
   intervalMs: DEFAULT_MS,
   historyEnabled: false,
   historyRetentionSecs: 86_400,
+  language: "auto",
 };
-
-/** 1000 → "1 秒"，2500 → "2.5 秒" */
-export function intervalLabel(ms: number): string {
-  return ms % 1000 === 0 ? `${ms / 1000} 秒` : `${(ms / 1000).toFixed(1)} 秒`;
-}
-
-/** 保留时长文案：3600 → "1 小时"，5400 → "1.5 小时"，600 → "10 分钟" */
-export function retentionLabel(secs: number): string {
-  if (secs % 86_400 === 0) return `${secs / 86_400} 天`;
-  if (secs % 3600 === 0) return `${secs / 3600} 小时`;
-  if (secs % 60 === 0 && secs < 3600) return `${secs / 60} 分钟`;
-  return `${(secs / 3600).toFixed(1)} 小时`;
-}
 
 /**
  * 应用设置。

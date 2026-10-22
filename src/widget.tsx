@@ -6,8 +6,11 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Ring, Sparkline } from "./components/Charts";
 import { useMetrics } from "./lib/useMetrics";
 import { splitRate, tempColor } from "./lib/format";
+import { initLocale, useI18n } from "./i18n";
 import type { WidgetMode } from "./lib/types";
 import "./styles.css";
+
+initLocale();
 
 /** 从 localStorage 取上次的不透明度；真正的效果由 Rust 改 NSWindow.alphaValue 实现 */
 function storedOpacity(): number {
@@ -29,6 +32,7 @@ function compact(v: number): string {
 
 export default function Widget() {
   const { snap, series } = useMetrics(72);
+  const i = useI18n();
   const [mode, setMode] = useState<WidgetMode>(() =>
     localStorage.getItem("ezpcm.mode") === "bar" ? "bar" : "card",
   );
@@ -119,7 +123,7 @@ export default function Widget() {
   const menuNode = menu && (
     <div className="ctx" style={{ left: menu.x, top: menu.y }} onClick={(e) => e.stopPropagation()}>
       <button onClick={() => setMode(mode === "card" ? "bar" : "card")}>
-        切换为{mode === "card" ? "紧凑条" : "卡片"}
+        {mode === "card" ? i.t("w.toBar") : i.t("w.toCard")}
       </button>
       <button
         onClick={() => {
@@ -127,7 +131,7 @@ export default function Widget() {
           setMenu(null);
         }}
       >
-        {pinned ? "取消置顶" : "保持置顶"}
+        {pinned ? i.t("w.unpin") : i.t("w.pin")}
         <span className="kbd">{pinned ? "ON" : "OFF"}</span>
       </button>
       <button
@@ -136,12 +140,12 @@ export default function Widget() {
           setMenu(null);
         }}
       >
-        鼠标穿透
+        {i.t("w.clickThrough")}
       </button>
-      <button onClick={() => invoke("open_dashboard").catch(() => {})}>打开主面板</button>
+      <button onClick={() => invoke("open_dashboard").catch(() => {})}>{i.t("w.openDash")}</button>
       <hr />
       <button className="danger" onClick={() => invoke("quit_app").catch(() => {})}>
-        退出
+        {i.t("w.quit")}
       </button>
     </div>
   );
@@ -165,33 +169,33 @@ export default function Widget() {
                 setBarMenu(false);
                 setMode("card");
               }}
-              title="恢复为卡片"
+              title={i.t("w.restoreCard")}
             >
-              卡片
+              {i.t("w.card")}
             </button>
-            <button className={pinned ? "on" : ""} onClick={togglePin} title={pinned ? "取消置顶" : "保持置顶"}>
-              置顶
+            <button className={pinned ? "on" : ""} onClick={togglePin} title={pinned ? i.t("w.unpin") : i.t("w.pin")}>
+              {i.t("w.pinShort")}
             </button>
             <button
               onClick={() => {
                 setBarMenu(false);
                 invoke("set_click_through", { on: true }).catch(() => {});
               }}
-              title="鼠标穿透（可从托盘关闭）"
+              title={i.t("w.throughHint")}
             >
-              穿透
+              {i.t("w.throughShort")}
             </button>
             <button
               onClick={() => {
                 setBarMenu(false);
                 invoke("open_dashboard").catch(() => {});
               }}
-              title="打开主面板"
+              title={i.t("w.openDash")}
             >
-              面板
+              {i.t("w.dashShort")}
             </button>
-            <button className="danger" onClick={() => invoke("quit_app").catch(() => {})} title="退出">
-              退出
+            <button className="danger" onClick={() => invoke("quit_app").catch(() => {})} title={i.t("w.quit")}>
+              {i.t("w.quit")}
             </button>
           </div>
         ) : (
@@ -251,7 +255,7 @@ export default function Widget() {
           EZPcMonitor
         </span>
         <div className="w-actions">
-          <button className="w-btn" title="切换紧凑模式" onClick={() => setMode("bar")}>
+          <button className="w-btn" title={i.t("w.compact")} onClick={() => setMode("bar")}>
             <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
               <rect x="0.5" y="3.2" width="9" height="1.6" rx="0.8" fill="currentColor" />
               <rect x="0.5" y="6.4" width="9" height="1.6" rx="0.8" fill="currentColor" opacity="0.5" />
@@ -259,7 +263,7 @@ export default function Widget() {
           </button>
           <button
             className="w-btn w-close"
-            title="隐藏悬浮窗"
+            title={i.t("w.hide")}
             onClick={() => invoke("toggle_widget").catch(() => {})}
           >
             <svg width="9" height="9" viewBox="0 0 9 9" fill="none">

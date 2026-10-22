@@ -1,10 +1,11 @@
 import type { DiskHealth } from "../lib/types";
+import { useI18n, type Key } from "../i18n";
 
-const LABEL: Record<string, string> = {
-  good: "正常",
-  warning: "留意",
-  bad: "告警",
-  unknown: "未知",
+const LABEL: Record<string, Key> = {
+  good: "ds.good",
+  warning: "ds.warning",
+  bad: "ds.bad",
+  unknown: "ds.unknown",
 };
 
 const COLOR: Record<string, string> = {
@@ -22,15 +23,16 @@ const COLOR: Record<string, string> = {
  * `percentage_used` 是磨损记账而不是倒计时，所以写「磨损」而不是「剩余寿命」。
  */
 export function DiskStatusChip({ h }: { h: DiskHealth }) {
+  const i = useI18n();
   const color = COLOR[h.status] ?? "var(--dim)";
   return (
     <span className="disk-status">
       <span className="dot" style={{ background: color }} />
-      <span style={{ color }}>{LABEL[h.status] ?? LABEL.unknown}</span>
+      <span style={{ color }}>{i.t(LABEL[h.status] ?? LABEL.unknown)}</span>
       {h.lifeUsed != null && (
         <>
           <span className="sep">·</span>
-          <span>磨损 {h.lifeUsed.toFixed(0)}%</span>
+          <span>{i.t("ds.wear", { v: h.lifeUsed.toFixed(0) })}</span>
         </>
       )}
       {h.temperature != null && (

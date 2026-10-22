@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type { DiskHealth, HistoryPoint, Snapshot } from "./types";
@@ -65,23 +65,42 @@ export function useDiskHealth() {
   const [health, setHealth] = useState<DiskHealth[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const load = async (force = false) => {
+  const load = useCallback(async (force = false) => {
     setLoading(true);
     try {
       const list = await invoke<DiskHealth[]>("disk_health", { force });
       setHealth(list);
+      return list;
     } catch {
       setHealth([]);
+      return [];
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    load();
+    let dead = false;
+    let retry: ReturnType<typeof setTimeout> | undefined;
+
+    // 冷启动时第一次 smartctl 探测可能刚好超时，后端会给回空表。
+    // 别让用户盯着「正在读取…」等五分钟：空结果就短间隔补几次。
+    const run = async (attempt = 0) => {
+      const list = await load();
+      if (dead) return;
+      if (list.length === 0 && attempt < 3) {
+        retry = setTimeout(() => run(attempt + 1), 4000);
+      }
+    };
+
+    run();
     const t = setInterval(() => load(), 5 * 60 * 1000);
-    return () => clearInterval(t);
-  }, []);
+    return () => {
+      dead = true;
+      clearTimeout(retry);
+      clearInterval(t);
+    };
+  }, [load]);
 
   return { health, loading, refresh: () => load(true) };
 }

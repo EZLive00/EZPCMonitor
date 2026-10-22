@@ -10,6 +10,7 @@ pub mod bench;
 pub mod diskhealth;
 pub mod gpu;
 pub mod history;
+pub mod i18n;
 pub mod metrics;
 pub mod settings;
 
@@ -38,6 +39,9 @@ pub struct AppState {
     pub history_retention: Arc<AtomicU64>,
     /// 历史文件写入器。采集线程写，命令读/清空，所以套一层锁。
     pub recorder: Arc<Mutex<Option<history::Recorder>>>,
+    /// 界面语言：`auto` 或 `i18n::LANGS` 里的一项（用户的选择，不是解析结果）。
+    /// 托盘菜单要按它重画，前端拿它挑字典。
+    pub language: Mutex<String>,
     /// 托盘里点了「设置…」但主面板是刚拉起来的——这时前端还没挂上监听，
     /// 事件会丢。留个标记，等前端启动时主动来取一次。
     pub open_settings: AtomicBool,
@@ -57,9 +61,15 @@ impl Default for AppState {
             history_enabled: Arc::new(AtomicBool::new(settings::DEFAULT_HISTORY_ON)),
             history_retention: Arc::new(AtomicU64::new(settings::DEFAULT_RETENTION)),
             recorder: Arc::new(Mutex::new(None)),
+            language: Mutex::new(settings::DEFAULT_LANG.to_string()),
             open_settings: AtomicBool::new(false),
         }
     }
+}
+
+/// 当前生效的语言。用户选 `auto` 时才去问系统。
+fn lang_of(state: &AppState) -> i18n::Lang {
+    i18n::resolve(&state.language.lock().unwrap())
 }
 
 fn widget_dims(mode: &str) -> (f64, f64) {
@@ -93,6 +103,7 @@ struct SettingsPatch {
     interval_ms: Option<u64>,
     history_enabled: Option<bool>,
     history_retention_secs: Option<u64>,
+    language: Option<String>,
 }
 
 fn current_settings(state: &AppState) -> settings::Settings {
@@ -100,6 +111,7 @@ fn current_settings(state: &AppState) -> settings::Settings {
         interval_ms: state.interval_ms.load(Ordering::Relaxed),
         history_enabled: state.history_enabled.load(Ordering::Relaxed),
         history_retention_secs: state.history_retention.load(Ordering::Relaxed),
+        language: state.language.lock().unwrap().clone(),
     }
 }
 
@@ -108,12 +120,19 @@ fn get_settings(state: tauri::State<'_, AppState>) -> settings::Settings {
     current_settings(&state)
 }
 
+/// 系统语言。前端只用来显示「跟随系统（简体中文）」里的那个括号，
+/// 真正的解析结果以后端为准——避免两边各算一次算出不同答案。
+#[tauri::command]
+fn get_locale() -> String {
+    i18n::detect().tag().to_string()
+}
+
 /// 改设置。夹到合法区间 → 存内存 → 落盘 → 广播 `settings:changed` → 刷新托盘。
 ///
 /// 所有入口（托盘、设置弹窗）都走这一个函数，所以不存在「两个地方各改一半」的状态。
 #[tauri::command]
 fn update_settings(app: tauri::AppHandle, patch: SettingsPatch) -> settings::Settings {
-    let next = {
+    let (next, lang_changed) = {
         let state = app.state::<AppState>();
         let cur = current_settings(&state);
         let next = settings::Settings {
@@ -124,6 +143,7 @@ fn update_settings(app: tauri::AppHandle, patch: SettingsPatch) -> settings::Set
                     .history_retention_secs
                     .unwrap_or(cur.history_retention_secs),
             ),
+            language: settings::clamp_lang(patch.language.as_deref().unwrap_or(&cur.language)),
         };
         state.interval_ms.store(next.interval_ms, Ordering::Relaxed);
         state
@@ -132,12 +152,27 @@ fn update_settings(app: tauri::AppHandle, patch: SettingsPatch) -> settings::Set
         state
             .history_retention
             .store(next.history_retention_secs, Ordering::Relaxed);
-        next
+        *state.language.lock().unwrap() = next.language.clone();
+        let changed = next.language != cur.language;
+        (next, changed)
     };
+    // SMART 属性表在 Rust 侧就格式化好了，缓存里是上一门语言的字符串
+    if lang_changed {
+        diskhealth::clear_cache();
+    }
     settings::save(&app, &next);
     let _ = app.emit("settings:changed", &next);
     refresh_tray(&app);
+    sync_window_titles(&app);
     next
+}
+
+/// 主面板标题栏里的「主面板」也要跟着语言变——它露在最显眼的地方。
+fn sync_window_titles(app: &tauri::AppHandle) {
+    let lang = lang_of(&app.state::<AppState>());
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.set_title(&format!("EZPcMonitor · {}", i18n::t(lang, "window.dash")));
+    }
 }
 
 /// 历史记录的现状：条数、占用、实测每条大小、时间跨度。
@@ -250,7 +285,8 @@ fn disk_health(
         let s = state.snapshot.lock().unwrap();
         s.disks.iter().map(|d| d.mount.clone()).collect()
     };
-    diskhealth::query(&mounts, force.unwrap_or(false))
+    let lang = lang_of(&state);
+    diskhealth::query(&mounts, force.unwrap_or(false), lang)
 }
 
 #[tauri::command]
@@ -460,12 +496,13 @@ fn open_dashboard(app: tauri::AppHandle, state: tauri::State<'_, AppState>) {
         return;
     }
     // 按需创建：主面板的 WebView 常驻要多吃 50MB 内存，没打开就不该存在
+    let lang = lang_of(&state);
     let _ = tauri::WebviewWindowBuilder::new(
         &app,
         "main",
         tauri::WebviewUrl::App("index.html".into()),
     )
-    .title("EZPcMonitor · 主面板")
+    .title(format!("EZPcMonitor · {}", i18n::t(lang, "window.dash")))
     // 进程榜要放 20 行，680 高的窗口只能露 4 行——加高到 820，能露出 15 行左右，
     // 剩下的滚动。再高就要顶到屏幕边缘了。
     .inner_size(940.0, 820.0)
@@ -496,6 +533,7 @@ pub fn run() {
             disk_bench,
             get_settings,
             update_settings,
+            get_locale,
             history_stats,
             history_range,
             clear_history,
@@ -532,6 +570,7 @@ pub fn run() {
                 state
                     .history_retention
                     .store(saved.history_retention_secs, Ordering::Relaxed);
+                *state.language.lock().unwrap() = saved.language.clone();
 
                 // 历史文件放在数据目录（不是配置目录）：这是数据，不是偏好
                 if let Ok(dir) = app.path().app_data_dir() {
@@ -752,24 +791,26 @@ fn tray_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
         .get_webview_window("widget")
         .and_then(|w| w.is_visible().ok())
         .unwrap_or(true);
+    let lang = lang_of(&app.state::<AppState>());
+    let tr = |k: &str| i18n::t(lang, k);
 
-    let dash = MenuItem::with_id(app, "dashboard", "打开主面板", true, None::<&str>)?;
+    let dash = MenuItem::with_id(app, "dashboard", tr("dashboard"), true, None::<&str>)?;
 
     // 显示/隐藏也归到「形态」里：本质是同一个东西的三种状态（隐藏 / 卡片 / 条）
-    let toggle_label = if visible { "隐藏悬浮窗" } else { "显示悬浮窗" };
+    let toggle_label = if visible { tr("hide") } else { tr("show") };
     let toggle = MenuItem::with_id(app, "toggle", toggle_label, true, None::<&str>)?;
-    let card = CheckMenuItem::with_id(app, "mode:card", "卡片", true, mode == "card", None::<&str>)?;
+    let card = CheckMenuItem::with_id(app, "mode:card", tr("mode.card"), true, mode == "card", None::<&str>)?;
     let bar = CheckMenuItem::with_id(
         app,
         "mode:bar",
-        "紧凑条（单行）",
+        tr("mode.bar"),
         true,
         mode == "bar",
         None::<&str>,
     )?;
     let mode_sep = PredefinedMenuItem::separator(app)?;
     let mode_menu =
-        Submenu::with_items(app, "悬浮窗形态", true, &[&toggle, &mode_sep, &card, &bar])?;
+        Submenu::with_items(app, tr("mode"), true, &[&toggle, &mode_sep, &card, &bar])?;
 
     let mut op_items = Vec::new();
     for pct in OPACITY_STEPS {
@@ -787,12 +828,12 @@ fn tray_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
         .iter()
         .map(|i| i as &dyn IsMenuItem<tauri::Wry>)
         .collect();
-    let opacity_menu = Submenu::with_items(app, "悬浮窗不透明度", true, &op_refs)?;
+    let opacity_menu = Submenu::with_items(app, tr("opacity"), true, &op_refs)?;
 
     let click = CheckMenuItem::with_id(
         app,
         "click_through",
-        "鼠标穿透",
+        tr("click"),
         true,
         through,
         None::<&str>,
@@ -803,18 +844,22 @@ fn tray_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     let interval = app.state::<AppState>().interval_ms.load(Ordering::Relaxed);
     let mut freq_items = Vec::new();
     for (i, preset) in settings::PRESETS.iter().enumerate() {
-        let tier = ["高", "中", "低"][i];
+        let tier = tr(["tier.high", "tier.mid", "tier.low"][i]);
         freq_items.push(CheckMenuItem::with_id(
             app,
             format!("freq:{preset}"),
-            format!("{tier}（{}）", settings::label(*preset)),
+            format!(
+                "{} {}",
+                tier,
+                i18n::paren(lang, &settings::label(*preset, lang))
+            ),
             true,
             interval == *preset,
             None::<&str>,
         )?);
     }
     let freq_sep = PredefinedMenuItem::separator(app)?;
-    let freq_custom = MenuItem::with_id(app, "freq:custom", "更多设置…", true, None::<&str>)?;
+    let freq_custom = MenuItem::with_id(app, "freq:custom", tr("more"), true, None::<&str>)?;
     let mut freq_refs: Vec<&dyn IsMenuItem<tauri::Wry>> = freq_items
         .iter()
         .map(|i| i as &dyn IsMenuItem<tauri::Wry>)
@@ -823,14 +868,14 @@ fn tray_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     freq_refs.push(&freq_custom);
     let freq_menu = Submenu::with_items(
         app,
-        format!("监控频率 · {}", settings::label(interval)),
+        format!("{} · {}", tr("freq"), settings::label(interval, lang)),
         true,
         &freq_refs,
     )?;
 
     let sep = PredefinedMenuItem::separator(app)?;
-    let settings_item = MenuItem::with_id(app, "settings", "设置…", true, None::<&str>)?;
-    let quit = MenuItem::with_id(app, "quit", "退出 EZPcMonitor", true, None::<&str>)?;
+    let settings_item = MenuItem::with_id(app, "settings", tr("settings"), true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", tr("quit"), true, None::<&str>)?;
 
     Menu::with_items(
         app,

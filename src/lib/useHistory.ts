@@ -104,11 +104,3 @@ export function seriesStats(rows: HistPoint[], key: keyof HistPoint) {
   }
   return { avg: sum / rows.length, max: peak };
 }
-
-/** unix 秒 → "14:05"（跨天时补上日期 "10-22 14:05"） */
-export function clockLabel(ts: number, withDate = false): string {
-  const d = new Date(ts * 1000);
-  const hm = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-  if (!withDate) return hm;
-  return `${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} ${hm}`;
-}

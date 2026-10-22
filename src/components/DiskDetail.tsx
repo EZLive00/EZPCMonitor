@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { Sparkline } from "./Charts";
 import type { BenchResult, DiskHealth, DiskInfo, HistoryPoint } from "../lib/types";
 import { bytes, rate } from "../lib/format";
+import { useI18n } from "../i18n";
 
 interface Props {
   disk: DiskInfo;
@@ -25,6 +26,7 @@ const SIZES = [256, 512, 1024];
  * （见 ADR-006），代价是不能拖到第二块屏，暂时接受。
  */
 export function DiskDetail({ disk, health, series, onClose, onRefresh, refreshing }: Props) {
+  const i = useI18n();
   const [size, setSize] = useState(512);
   const [bench, setBench] = useState<BenchResult | null>(null);
   const [benching, setBenching] = useState(false);
@@ -63,9 +65,9 @@ export function DiskDetail({ disk, health, series, onClose, onRefresh, refreshin
     ? [
         health.device,
         health.bus,
-        health.solidState == null ? "" : health.solidState ? "固态" : "机械",
+        health.solidState == null ? "" : health.solidState ? i.t("dd.solid") : i.t("dd.hdd"),
         health.serial ? `SN ${health.serial}` : "",
-        health.firmware ? `固件 ${health.firmware}` : "",
+        health.firmware ? i.t("dd.firmware", { v: health.firmware }) : "",
       ].filter(Boolean)
     : [];
 
@@ -78,14 +80,14 @@ export function DiskDetail({ disk, health, series, onClose, onRefresh, refreshin
           <div>
             <div className="modal-title">{disk.name}</div>
             <div className="modal-sub">
-              {disk.mount} · {disk.fs || "未知文件系统"} · {bytes(disk.total, 0)}
+              {disk.mount} · {disk.fs || i.t("common.unknownFs")} · {bytes(disk.total, 0)}
             </div>
           </div>
           <div className="modal-actions">
             <button className="mini" onClick={onRefresh} disabled={refreshing}>
-              {refreshing ? "检测中" : "重新检测"}
+              {refreshing ? i.t("common.detecting") : i.t("common.redetect")}
             </button>
-            <button className="modal-close" onClick={onClose} title="关闭（Esc）">
+            <button className="modal-close" onClick={onClose} title={i.t("common.closeEsc")}>
               ×
             </button>
           </div>
@@ -98,39 +100,42 @@ export function DiskDetail({ disk, health, series, onClose, onRefresh, refreshin
 
               <div className="stat-row">
                 <div className="stat">
-                  <div className="stat-k">磨损</div>
+                  <div className="stat-k">{i.t("dd.wear")}</div>
                   <div className="stat-v">
                     {health.lifeUsed != null ? `${health.lifeUsed.toFixed(0)}%` : "—"}
                   </div>
                   <div className="stat-n">
-                    {health.lifeLeft != null ? `剩余 ${health.lifeLeft.toFixed(0)}%` : "厂商标称耐久度估算"}
+                    {health.lifeLeft != null
+                      ? i.t("dd.left", { v: health.lifeLeft.toFixed(0) })
+                      : i.t("dd.wearNote")}
                   </div>
                 </div>
                 <div className="stat">
-                  <div className="stat-k">温度</div>
+                  <div className="stat-k">{i.t("dd.temp")}</div>
                   <div className="stat-v">
                     {health.temperature != null ? `${health.temperature.toFixed(0)}°` : "—"}
                   </div>
-                  <div className="stat-n">控制器上报</div>
+                  <div className="stat-n">{i.t("dd.tempNote")}</div>
                 </div>
                 <div className="stat">
-                  <div className="stat-k">已用 / 容量</div>
+                  <div className="stat-k">{i.t("dd.usage")}</div>
                   <div className="stat-v">{Math.round(capacityPct)}%</div>
-                  <div className="stat-n">{bytes(disk.used, 1)} 已用</div>
+                  <div className="stat-n">{i.t("dd.usedNote", { v: bytes(disk.used, 1) })}</div>
                 </div>
                 <div className="stat">
-                  <div className="stat-k">介质错误</div>
+                  <div className="stat-k">{i.t("dd.media")}</div>
                   <div className="stat-v" style={{ color: health.mediaErrors ? "var(--warn)" : undefined }}>
                     {health.mediaErrors ?? "—"}
                   </div>
-                  <div className="stat-n">非零即需备份</div>
+                  <div className="stat-n">{i.t("dd.mediaNote")}</div>
                 </div>
               </div>
 
               <div className="sec-h">
-                实时读写
+                {i.t("dd.io")}
                 <span className="sec-tag">
-                  读 {rate(disk.readBps)} · 写 {rate(disk.writeBps)}
+                  {i.t("dash.read", { v: rate(disk.readBps) })} ·{" "}
+                  {i.t("dash.write", { v: rate(disk.writeBps) })}
                 </span>
               </div>
               <div className="io-sparks">
@@ -146,12 +151,10 @@ export function DiskDetail({ disk, health, series, onClose, onRefresh, refreshin
               </div>
             </>
           ) : (
-            <div className="dh-note">
-              正在读取 SMART 数据…如果一直没有结果，说明这块盘不提供健康信息。
-            </div>
+            <div className="dh-note">{i.t("dd.smartLoading")}</div>
           )}
 
-          <div className="sec-h">测速（顺序读写）</div>
+          <div className="sec-h">{i.t("dd.bench")}</div>
           <div className="bench">
             <div className="bench-opts">
               {SIZES.map((s) => (
@@ -165,17 +168,17 @@ export function DiskDetail({ disk, health, series, onClose, onRefresh, refreshin
                 </button>
               ))}
               <button className="btn-primary" onClick={startBench} disabled={benching || !enoughSpace}>
-                {benching ? "测速中…" : "开始测速"}
+                {benching ? i.t("common.testing") : i.t("common.startBench")}
               </button>
             </div>
             {!enoughSpace && (
-              <div className="dh-note">可用空间不足（需要约 {bytes(needBytes, 0)}），换个容量再试。</div>
+              <div className="dh-note">{i.t("dd.benchNeed", { v: bytes(needBytes, 0) })}</div>
             )}
             {err && <div className="dh-note" style={{ color: "var(--warn)" }}>{err}</div>}
             {bench && (
               <div className="bench-result">
                 <div className="stat">
-                  <div className="stat-k">顺序写</div>
+                  <div className="stat-k">{i.t("dd.seqWrite")}</div>
                   <div className="stat-v" style={{ color: "#a78bfa" }}>
                     {bench.writeMbps.toFixed(0)}
                     <span className="stat-u">MB/s</span>
@@ -183,7 +186,7 @@ export function DiskDetail({ disk, health, series, onClose, onRefresh, refreshin
                   <div className="stat-n">{bench.sizeMb} MB / {(bench.writeMs / 1000).toFixed(2)} s</div>
                 </div>
                 <div className="stat">
-                  <div className="stat-k">顺序读</div>
+                  <div className="stat-k">{i.t("dd.seqRead")}</div>
                   <div className="stat-v" style={{ color: "#22d3ee" }}>
                     {bench.readMbps.toFixed(0)}
                     <span className="stat-u">MB/s</span>
@@ -191,7 +194,7 @@ export function DiskDetail({ disk, health, series, onClose, onRefresh, refreshin
                   <div className="stat-n">{bench.sizeMb} MB / {(bench.readMs / 1000).toFixed(2)} s</div>
                 </div>
                 <div className="bench-path">
-                  测试文件 {bench.path}（已删除）
+                  {i.t("dd.benchFile", { v: bench.path })}
                   {bench.note ? ` · ${bench.note}` : ""}
                 </div>
               </div>
@@ -201,20 +204,20 @@ export function DiskDetail({ disk, health, series, onClose, onRefresh, refreshin
           {health && (
             <>
               <div className="sec-h">
-                SMART 属性
-                <span className="sec-tag">{health.attrs.length} 项</span>
+                {i.t("dd.smart")}
+                <span className="sec-tag">{i.tn("p.attrs", health.attrs.length)}</span>
               </div>
               <table className="dh-table">
                 <thead>
                   <tr>
-                    <th>属性</th>
-                    <th>值</th>
-                    <th>备注</th>
+                    <th>{i.t("dd.colAttr")}</th>
+                    <th>{i.t("dd.colValue")}</th>
+                    <th>{i.t("dd.colNote")}</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {health.attrs.map((a, i) => (
-                    <tr key={`${a.name}-${i}`} className={a.critical ? "bad" : undefined}>
+                  {health.attrs.map((a, idx) => (
+                    <tr key={`${a.name}-${idx}`} className={a.critical ? "bad" : undefined}>
                       <td className="name">{a.name}</td>
                       <td className="val">{a.value || "—"}</td>
                       <td className="extra">{a.extra}</td>
@@ -228,8 +231,9 @@ export function DiskDetail({ disk, health, series, onClose, onRefresh, refreshin
         </div>
 
         <div className="modal-foot">
-          数据来源 {health?.source || "—"} · 磨损是厂商标称耐久度的估算，
-          <b>不代表故障预测</b>；介质错误、备用块这类「已经发生」的计数更值得关注。
+          {i.t("dd.footSource", { v: health?.source || "—" })} · {i.t("dd.footWarnLead")}
+          <b>{i.t("dd.footWarnBold")}</b>
+          {i.t("dd.footWarn")}
         </div>
       </div>
     </div>
