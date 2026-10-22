@@ -1,0 +1,59 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "EZPcMonitor",
+  "version": "0.1.0",
+  "identifier": "dev.ezpc.monitor",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "macOSPrivateApi": true,
+    "windows": [
+      {
+        "label": "widget",
+        "url": "widget.html",
+        "title": "EZPcMonitor",
+        "width": 272,
+        "height": 204,
+        "resizable": false,
+        "maximizable": false,
+        "minimizable": false,
+        "decorations": false,
+        "transparent": true,
+        "shadow": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "visible": true,
+        "focus": false,
+        "dragDropEnabled": false
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src ipc: http://ipc.localhost"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "category": "Utility",
+    "shortDescription": "跨平台轻量级 PC 硬件监控",
+    "longDescription": "EZPcMonitor 监控 CPU、内存、磁盘、网络与温度，提供半透明悬浮窗与主面板。",
+    "macOS": {
+      "minimumSystemVersion": "11.0"
+    },
+    "resources": [
+      "resources/bin/smartctl",
+      "resources/bin/COPYING"
+    ]
+  }
+}

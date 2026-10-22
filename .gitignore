@@ -1,0 +1,15 @@
+node_modules/
+dist/
+src-tauri/target/
+src-tauri/gen/
+.DS_Store
+*.log
+
+# 本地工具状态（agent 记忆、编辑器配置）
+.workbuddy-ai/
+.vscode/
+.idea/
+
+# 打包临时产物
+*.dmg
+*.tmp

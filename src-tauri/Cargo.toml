@@ -1,0 +1,35 @@
+[package]
+name = "ezpcm"
+version = "0.1.0"
+edition = "2024"
+description = "EZPcMonitor - 跨平台轻量级硬件监控"
+authors = ["wargon"]
+
+[lib]
+name = "ezpcm"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+sysinfo = "0.39.6"
+tauri = { version = "2.12.4", features = ["macos-private-api", "tray-icon"] }
+window-vibrancy = "0.8.1"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+# 只为了给 NSWindow 发一条 setAlphaValue:，做整窗不透明度
+objc2 = "0.6"
+
+[target.'cfg(unix)'.dependencies]
+# 测速时给文件描述符设 F_NOCACHE，否则读的是 page cache，数字虚高
+libc = "0.2"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true
