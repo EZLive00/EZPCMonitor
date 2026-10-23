@@ -139,13 +139,13 @@ export function DiskDetail({ disk, health, series, onClose, onRefresh, refreshin
                 </span>
               </div>
               <div className="io-sparks">
-                <Sparkline data={ioRead} max={ioMax} id="modal-dr" height={44} color="#22d3ee" />
+                <Sparkline data={ioRead} max={ioMax} id="modal-dr" height={44} color="var(--c-io-r)" />
                 <Sparkline
                   data={ioWrite}
                   max={ioMax}
                   id="modal-dw"
                   height={44}
-                  color="#a78bfa"
+                  color="var(--c-io-w)"
                   showFill={false}
                 />
               </div>
@@ -179,7 +179,7 @@ export function DiskDetail({ disk, health, series, onClose, onRefresh, refreshin
               <div className="bench-result">
                 <div className="stat">
                   <div className="stat-k">{i.t("dd.seqWrite")}</div>
-                  <div className="stat-v" style={{ color: "#a78bfa" }}>
+                  <div className="stat-v" style={{ color: "var(--c-io-w)" }}>
                     {bench.writeMbps.toFixed(0)}
                     <span className="stat-u">MB/s</span>
                   </div>
@@ -187,7 +187,7 @@ export function DiskDetail({ disk, health, series, onClose, onRefresh, refreshin
                 </div>
                 <div className="stat">
                   <div className="stat-k">{i.t("dd.seqRead")}</div>
-                  <div className="stat-v" style={{ color: "#22d3ee" }}>
+                  <div className="stat-v" style={{ color: "var(--c-io-r)" }}>
                     {bench.readMbps.toFixed(0)}
                     <span className="stat-u">MB/s</span>
                   </div>

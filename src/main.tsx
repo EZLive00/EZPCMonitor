@@ -8,11 +8,13 @@ import { SettingsModal } from "./components/SettingsModal";
 import { useDiskHealth, useMetrics } from "./lib/useMetrics";
 import { useSettings } from "./lib/useSettings";
 import { initLocale, useI18n } from "./i18n";
+import { initTheme } from "./lib/theme";
 import { bytes, rate, tempColor } from "./lib/format";
 import type { DiskInfo } from "./lib/types";
 import "./styles.css";
 
 initLocale();
+initTheme();
 
 export default function Dashboard() {
   const { snap, series, alive } = useMetrics(120);
@@ -90,7 +92,7 @@ export default function Dashboard() {
             <span className="tag">{i.t("dash.live")}</span>
           </div>
           <div className="big">
-            <span className="num" style={{ color: "#22d3ee" }}>
+            <span className="num" style={{ color: "var(--c-cpu)" }}>
               {snap.cpu.usage.toFixed(1)}
             </span>
             <span className="unit">%</span>
@@ -101,7 +103,7 @@ export default function Dashboard() {
               id="dash-cpu"
               height={42}
               minMax={25}
-              color="#22d3ee"
+              color="var(--c-cpu)"
             />
           </div>
           <div className="cores">
@@ -129,8 +131,8 @@ export default function Dashboard() {
               size={86}
               stroke={7}
               label={i.t("dash.used").toUpperCase()}
-              from="#a78bfa"
-              to="#6d28d9"
+              from="var(--c-mem)"
+              to="var(--c-mem-2)"
             />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div className="kv">
@@ -150,7 +152,7 @@ export default function Dashboard() {
                 {bytes(snap.mem.swapUsed, 1)} / {bytes(snap.mem.swapTotal, 0)}
               </b>
             </div>
-            <Meter value={swapPct} height={5} color="linear-gradient(90deg,#8b5cf6,#a78bfa)" />
+            <Meter value={swapPct} height={5} color="linear-gradient(90deg,var(--c-mem-2),var(--c-mem))" />
           </div>
         </div>
 
@@ -208,7 +210,7 @@ export default function Dashboard() {
           {snap.gpu?.utilization != null ? (
             <>
               <div className="big">
-                <span className="num" style={{ color: "#a78bfa" }}>
+                <span className="num" style={{ color: "var(--c-mem)" }}>
                   {snap.gpu.utilization.toFixed(0)}
                 </span>
                 <span className="unit">%</span>
@@ -219,7 +221,7 @@ export default function Dashboard() {
                   id="dash-gpu"
                   height={34}
                   minMax={25}
-                  color="#a78bfa"
+                  color="var(--c-mem)"
                 />
               </div>
               <div style={{ marginTop: "auto", paddingTop: 10 }}>
@@ -246,9 +248,9 @@ export default function Dashboard() {
           <div className="card-h">
             {i.t("card.disk")}
             <span className="tag">
-              <i style={{ background: "#22d3ee" }} />
+              <i style={{ background: "var(--c-cpu)" }} />
               {i.t("dash.read", { v: rate(snap.diskTotalReadBps) })}
-              <i style={{ background: "#a78bfa", marginLeft: 10 }} />
+              <i style={{ background: "var(--c-mem)", marginLeft: 10 }} />
               {i.t("dash.write", { v: rate(snap.diskTotalWriteBps) })}
             </span>
           </div>
@@ -278,7 +280,7 @@ export default function Dashboard() {
                       color={
                         p > 90
                           ? "var(--danger)"
-                          : "linear-gradient(90deg,#0e7490,#22d3ee)"
+                          : "linear-gradient(90deg,var(--c-cpu-2),var(--c-cpu))"
                       }
                     />
                     <span
@@ -316,7 +318,7 @@ export default function Dashboard() {
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 10, color: "var(--dim)", letterSpacing: "0.1em" }}>DOWN</div>
               <div className="big" style={{ marginTop: 2 }}>
-                <span className="num" style={{ fontSize: 24, color: "#22d3ee" }}>
+                <span className="num" style={{ fontSize: 24, color: "var(--c-cpu)" }}>
                   {bytes(snap.net.rxBps, 1).split(" ")[0]}
                 </span>
                 <span className="unit">{bytes(snap.net.rxBps, 1).split(" ")[1]}/s</span>
@@ -325,7 +327,7 @@ export default function Dashboard() {
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 10, color: "var(--dim)", letterSpacing: "0.1em" }}>UP</div>
               <div className="big" style={{ marginTop: 2 }}>
-                <span className="num" style={{ fontSize: 24, color: "#a78bfa" }}>
+                <span className="num" style={{ fontSize: 24, color: "var(--c-mem)" }}>
                   {bytes(snap.net.txBps, 1).split(" ")[0]}
                 </span>
                 <span className="unit">{bytes(snap.net.txBps, 1).split(" ")[1]}/s</span>
@@ -338,7 +340,7 @@ export default function Dashboard() {
               id="dash-net"
               height={30}
               minMax={64 * 1024}
-              color="#22d3ee"
+              color="var(--c-cpu)"
             />
           </div>
           <div style={{ marginTop: "auto" }}>

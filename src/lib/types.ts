@@ -150,6 +150,8 @@ export interface AppSettings {
   historyRetentionSecs: number;
   /** `auto` 或 zh-CN / zh-TW / en / ja / ko / fr / es */
   language: string;
+  /** `auto` / `dark` / `light` */
+  theme: string;
 }
 
 /** 落盘的历史点（10 秒一条，字段名对应 Rust 的 history::Point） */

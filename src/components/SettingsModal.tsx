@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useHistoryStats } from "../lib/useHistory";
 import { MAX_MS, MIN_MS, PRESETS } from "../lib/useSettings";
 import { LANGS, useI18n, type Lang } from "../i18n";
+import { THEMES, setTheme, useTheme } from "../lib/theme";
 import { bytes } from "../lib/format";
 import type { AppSettings } from "../lib/types";
 
@@ -41,6 +42,7 @@ function pickUnit(secs: number) {
 export function SettingsModal({ settings, update, onClose, onOpenHistory }: Props) {
   const i = useI18n();
   const { stats, reload } = useHistoryStats();
+  const { choice: themeChoice } = useTheme();
   const [draftMs, setDraftMs] = useState(secText(settings.intervalMs));
 
   const initialUnit = pickUnit(settings.historyRetentionSecs);
@@ -155,9 +157,31 @@ export function SettingsModal({ settings, update, onClose, onOpenHistory }: Prop
             </div>
           </div>
 
-          {/* ---------------- 通用：语言 ---------------- */}
+          {/* ---------------- 通用：主题 ---------------- */}
           <div className="set-group">
             <div className="set-h">{i.t("set.group.general")}</div>
+            <div className="set-row">
+              <div className="set-label">
+                {i.t("set.theme")}
+                <span>{i.t("set.themeHint")}</span>
+              </div>
+              <div className="set-ctrl">
+                <div className="theme-opts">
+                  {THEMES.map((th) => (
+                    <button
+                      key={th.value}
+                      className={`theme-opt${themeChoice === th.value ? " on" : ""}`}
+                      onClick={() => setTheme(th.value)}
+                    >
+                      {/* 色块是「这个主题长什么样」的预览，所以写死，不跟当前主题走 */}
+                      <i className={th.value} />
+                      {i.t(th.key)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
             <div className="set-row">
               <div className="set-label">
                 {i.t("set.language")}

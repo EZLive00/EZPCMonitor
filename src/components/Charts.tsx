@@ -28,7 +28,7 @@ export function Ring({ value, size = 72, stroke = 5.5, from, to, label, id }: Ri
           cy={size / 2}
           r={r}
           fill="none"
-          stroke="rgba(255,255,255,0.075)"
+          stroke="var(--grid)"
           strokeWidth={stroke}
         />
         <circle
@@ -71,7 +71,7 @@ export function Sparkline({
   max,
   minMax = 10,
   height = 36,
-  color = "#22d3ee",
+  color = "var(--c-cpu)",
   id = "spark",
   showFill = true,
 }: SparkProps) {
@@ -126,7 +126,7 @@ interface MeterProps {
 export function Meter({ value, color = "var(--accent)", height = 6, track }: MeterProps) {
   const v = Math.max(0, Math.min(100, value));
   return (
-    <div className="meter" style={{ height, background: track ?? "rgba(255,255,255,0.07)" }}>
+    <div className="meter" style={{ height, background: track ?? "rgba(var(--ovl), 0.07)" }}>
       <div
         className="meter-fill"
         style={{ width: `${v}%`, background: color, transition: "width .5s cubic-bezier(.22,1,.36,1)" }}

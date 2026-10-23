@@ -1,15 +1,172 @@
+/* ============================ 主题 ============================
+   深色是基准，浅色只覆盖同名的变量（见下方 :root[data-theme="light"]）。
+   所有面板/描边/分隔线都不写死颜色，而是走两组「叠加层」变量：
+
+     --ovl       叠加层基色（深色=白，浅色=墨蓝）
+     rgba(var(--ovl), α)   → 深色下是提亮，浅色下是压暗
+
+   同一个 α 在两种主题下都能读，是因为叠加方向反了过来。
+   --text-rgb 同理，用于「半透明的文字色」。
+   ============================================================ */
+
 :root {
+  color-scheme: dark;
+
   --text: #e8edf7;
+  --text-rgb: 232, 237, 247;
   --muted: #8b95a7;
   --dim: #5f697a;
+  --dim-rgb: 95, 105, 122;
+
+  /* 叠加层基色：深色主题下用白色提亮 */
+  --ovl: 255, 255, 255;
+  --line: rgba(255, 255, 255, 0.08);
+  /* 图表网格线：比分隔线更淡，只用来给曲线一个参照 */
+  --grid: rgba(255, 255, 255, 0.075);
+
+  --page: radial-gradient(1200px 600px at 15% -10%, #18203a 0%, #0b0d12 45%, #08090d 100%);
+  --card-bg: linear-gradient(160deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.018));
+  --card-shadow: none;
+  --modal-bg: linear-gradient(165deg, rgba(28, 33, 46, 0.98), rgba(14, 17, 24, 0.99));
+  --popover-bg: rgba(22, 26, 36, 0.96);
+  --widget-bg: linear-gradient(158deg, rgba(24, 29, 42, 0.74) 0%, rgba(10, 12, 18, 0.82) 100%);
+  --scrim: rgba(4, 6, 10, 0.62);
+  --shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+  --shadow-sm: 0 12px 30px rgba(0, 0, 0, 0.55);
+
   --accent: #22d3ee;
+  --accent-rgb: 34, 211, 238;
   --accent-2: #8b5cf6;
   --ok: #34d399;
   --warn: #fbbf24;
   --danger: #f87171;
-  --line: rgba(255, 255, 255, 0.08);
+  --danger-rgb: 248, 113, 113;
+  --ok-glow: rgba(52, 211, 153, 0.75);
+
+  --on-accent: #04212a;
+  --btn-primary-bg: linear-gradient(180deg, #4ee0f5, #22d3ee);
+
+  /* 图表色单独一套：1.6px 的线在白底上会糊掉，浅色要压深一档 */
+  --c-cpu: #22d3ee;
+  --c-cpu-2: #0e7490;
+  --c-mem: #a78bfa;
+  --c-mem-2: #6d28d9;
+  --c-temp: #fbbf24;
+  --c-rx: #38bdf8;
+  --c-disk: #34d399;
+  --c-gpu: #c084fc;
+  /* 磁盘详情页的读写曲线：和 CPU/内存同色系，但语义独立，留一对自己的变量 */
+  --c-io-r: #22d3ee;
+  --c-io-w: #a78bfa;
+
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC",
     "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --text: #101828;
+  --text-rgb: 16, 24, 40;
+  --muted: #5a6478;
+  --dim: #8590a3;
+  --dim-rgb: 133, 144, 163;
+
+  /* 浅色主题下叠加层是墨蓝：α 不变，方向从提亮翻成压暗 */
+  --ovl: 16, 24, 40;
+  --line: rgba(16, 24, 40, 0.09);
+  --grid: rgba(16, 24, 40, 0.07);
+
+  --page: radial-gradient(1200px 620px at 12% -12%, #ffffff 0%, #f5f7fc 46%, #eef1f7 100%);
+  --card-bg: linear-gradient(160deg, #ffffff, #fbfcfe);
+  --card-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 10px 26px rgba(16, 24, 40, 0.055);
+  --modal-bg: linear-gradient(165deg, rgba(255, 255, 255, 0.99), rgba(247, 249, 253, 0.99));
+  --popover-bg: rgba(255, 255, 255, 0.98);
+  /* 浅色下悬浮窗要更实一点：白底叠白字，透明度高了字就飘 */
+  --widget-bg: linear-gradient(158deg, rgba(255, 255, 255, 0.82) 0%, rgba(242, 245, 251, 0.91) 100%);
+  --scrim: rgba(16, 24, 40, 0.30);
+  --shadow: 0 30px 80px rgba(16, 24, 40, 0.18);
+  --shadow-sm: 0 12px 30px rgba(16, 24, 40, 0.14);
+
+  --accent: #0891b2;
+  --accent-rgb: 8, 145, 178;
+  --accent-2: #7c3aed;
+  --ok: #059669;
+  --warn: #d97706;
+  --danger: #dc2626;
+  --danger-rgb: 220, 38, 38;
+  --ok-glow: rgba(5, 150, 105, 0.55);
+
+  --on-accent: #ffffff;
+  --btn-primary-bg: linear-gradient(180deg, #22c5e0, #0891b2);
+
+  /* 图表色压深一档：1.6px 的线在白底上会被冲淡 */
+  --c-cpu: #0891b2;
+  --c-cpu-2: #155e75;
+  --c-mem: #7c3aed;
+  --c-mem-2: #4c1d95;
+  --c-temp: #d97706;
+  --c-rx: #0284c7;
+  --c-disk: #059669;
+  --c-gpu: #9333ea;
+  --c-io-r: #0891b2;
+  --c-io-w: #7c3aed;
+}
+
+/* 同一套浅色值写第二遍，是为了**首帧**。
+   前端要到 `get_settings` 回来才知道用户选了什么，在那之前页面上还没有
+   data-theme；如果只靠属性选择器，浅色系统上会先闪一下深色。
+   两处必须保持一致——改颜色时两边一起改。 */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    color-scheme: light;
+
+    --text: #101828;
+    --text-rgb: 16, 24, 40;
+    --muted: #5a6478;
+    --dim: #8590a3;
+    --dim-rgb: 133, 144, 163;
+
+    /* 浅色主题下叠加层是墨蓝：α 不变，方向从提亮翻成压暗 */
+    --ovl: 16, 24, 40;
+    --line: rgba(16, 24, 40, 0.09);
+    --grid: rgba(16, 24, 40, 0.07);
+
+    --page: radial-gradient(1200px 620px at 12% -12%, #ffffff 0%, #f5f7fc 46%, #eef1f7 100%);
+    --card-bg: linear-gradient(160deg, #ffffff, #fbfcfe);
+    --card-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 10px 26px rgba(16, 24, 40, 0.055);
+    --modal-bg: linear-gradient(165deg, rgba(255, 255, 255, 0.99), rgba(247, 249, 253, 0.99));
+    --popover-bg: rgba(255, 255, 255, 0.98);
+    /* 浅色下悬浮窗要更实一点：白底叠白字，透明度高了字就飘 */
+    --widget-bg: linear-gradient(158deg, rgba(255, 255, 255, 0.82) 0%, rgba(242, 245, 251, 0.91) 100%);
+    --scrim: rgba(16, 24, 40, 0.30);
+    --shadow: 0 30px 80px rgba(16, 24, 40, 0.18);
+    --shadow-sm: 0 12px 30px rgba(16, 24, 40, 0.14);
+
+    --accent: #0891b2;
+    --accent-rgb: 8, 145, 178;
+    --accent-2: #7c3aed;
+    --ok: #059669;
+    --warn: #d97706;
+    --danger: #dc2626;
+    --danger-rgb: 220, 38, 38;
+    --ok-glow: rgba(5, 150, 105, 0.55);
+
+    --on-accent: #ffffff;
+    --btn-primary-bg: linear-gradient(180deg, #22c5e0, #0891b2);
+
+    /* 图表色压深一档：1.6px 的线在白底上会被冲淡 */
+    --c-cpu: #0891b2;
+    --c-cpu-2: #155e75;
+    --c-mem: #7c3aed;
+    --c-mem-2: #4c1d95;
+    --c-temp: #d97706;
+    --c-rx: #0284c7;
+    --c-disk: #059669;
+    --c-gpu: #9333ea;
+    --c-io-r: #0891b2;
+    --c-io-w: #7c3aed;
+  }
 }
 
 /* 日文/韩文的汉字字形和中文不同（骨、直、来…）。不指定本地字体的话，
@@ -52,7 +209,7 @@ body.widget-body {
 }
 
 body.dash-body {
-  background: radial-gradient(1200px 600px at 15% -10%, #18203a 0%, #0b0d12 45%, #08090d 100%);
+  background: var(--page);
   overflow: hidden;
 }
 
@@ -75,9 +232,9 @@ button {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  background: linear-gradient(158deg, rgba(24, 29, 42, 0.74) 0%, rgba(10, 12, 18, 0.82) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  background: var(--widget-bg);
+  border: 1px solid rgba(var(--ovl), 0.1);
+  box-shadow: inset 0 1px 0 rgba(var(--ovl), 0.08);
   overflow: hidden;
 }
 
@@ -87,7 +244,7 @@ button {
   position: absolute;
   inset: 0 0 auto 0;
   height: 46%;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent);
+  background: linear-gradient(180deg, rgba(var(--ovl), 0.05), transparent);
   pointer-events: none;
 }
 
@@ -106,14 +263,14 @@ button {
   border-radius: 50%;
   background: var(--ok);
   /* 不要用无限循环动画：会让 CoreAnimation 的 CVDisplayLink 常驻 60fps */
-  box-shadow: 0 0 7px rgba(52, 211, 153, 0.75);
+  box-shadow: 0 0 7px var(--ok-glow);
 }
 
 .w-title {
   font-size: 10.5px;
   letter-spacing: 0.07em;
   font-weight: 600;
-  color: rgba(232, 237, 247, 0.82);
+  color: rgba(var(--text-rgb), 0.82);
   flex: 1;
 }
 
@@ -139,12 +296,12 @@ button {
 }
 
 .w-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
+  background: rgba(var(--ovl), 0.1);
+  color: var(--text);
 }
 
 .w-btn.w-close:hover {
-  background: rgba(248, 113, 113, 0.85);
+  background: rgba(var(--danger-rgb), 0.85);
 }
 
 .w-main {
@@ -258,7 +415,7 @@ button {
 }
 
 .w-foot b {
-  color: rgba(232, 237, 247, 0.92);
+  color: rgba(var(--text-rgb), 0.92);
   font-weight: 600;
 }
 
@@ -333,20 +490,20 @@ button {
   font-size: 10.5px;
   font-weight: 600;
   letter-spacing: 0.02em;
-  color: rgba(232, 237, 247, 0.92);
-  background: rgba(255, 255, 255, 0.07);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(var(--text-rgb), 0.92);
+  background: rgba(var(--ovl), 0.07);
+  border: 1px solid rgba(var(--ovl), 0.08);
   transition: background 0.14s ease, border-color 0.14s ease;
 }
 
 .bar-actions button:hover {
-  background: rgba(255, 255, 255, 0.16);
+  background: rgba(var(--ovl), 0.16);
 }
 
 .bar-actions button.on {
   color: var(--accent);
-  border-color: rgba(34, 211, 238, 0.4);
-  background: rgba(34, 211, 238, 0.12);
+  border-color: rgba(var(--accent-rgb), 0.4);
+  background: rgba(var(--accent-rgb), 0.12);
 }
 
 .bar-actions button.danger {
@@ -361,9 +518,9 @@ button {
   min-width: 132px;
   padding: 4px;
   border-radius: 10px;
-  background: rgba(22, 26, 36, 0.96);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.55);
+  background: var(--popover-bg);
+  border: 1px solid rgba(var(--ovl), 0.1);
+  box-shadow: var(--shadow-sm);
   backdrop-filter: blur(20px);
 }
 
@@ -381,7 +538,7 @@ button {
 }
 
 .ctx button:hover {
-  background: rgba(255, 255, 255, 0.09);
+  background: rgba(var(--ovl), 0.09);
 }
 
 .ctx button.danger {
@@ -449,8 +606,9 @@ button {
 }
 
 .card {
-  background: linear-gradient(160deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.018));
+  background: var(--card-bg);
   border: 1px solid var(--line);
+  box-shadow: var(--card-shadow);
   border-radius: 14px;
   padding: 14px 16px;
   display: flex;
@@ -538,7 +696,7 @@ button {
   width: 100%;
   height: 30px;
   border-radius: 3px;
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(var(--ovl), 0.12);
   display: flex;
   align-items: flex-end;
   overflow: hidden;
@@ -547,7 +705,7 @@ button {
 .core .fill {
   width: 100%;
   border-radius: 3px;
-  background: linear-gradient(180deg, #22d3ee, #0e7490);
+  background: linear-gradient(180deg, var(--c-cpu), var(--c-cpu-2));
   transition: height 0.45s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -559,7 +717,7 @@ button {
 
 .disk-row {
   padding: 7px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid rgba(var(--ovl), 0.05);
 }
 
 .disk-row:last-child {
@@ -617,7 +775,7 @@ button {
 .card-empty span {
   display: block;
   font-size: 9.5px;
-  color: rgba(95, 105, 122, 0.78);
+  color: rgba(var(--dim-rgb), 0.78);
   margin-top: 4px;
 }
 
@@ -633,7 +791,7 @@ button {
 }
 
 .disk-row.clickable:hover {
-  background: rgba(255, 255, 255, 0.045);
+  background: rgba(var(--ovl), 0.045);
 }
 
 .disk-foot {
@@ -658,7 +816,7 @@ button {
   height: 6px;
   border-radius: 50%;
   flex: none;
-  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.045);
+  box-shadow: 0 0 0 3px rgba(var(--ovl), 0.045);
 }
 
 .disk-status .sep {
@@ -691,7 +849,7 @@ button {
   align-items: center;
   justify-content: center;
   padding: 28px;
-  background: rgba(4, 6, 10, 0.62);
+  background: var(--scrim);
   backdrop-filter: blur(6px);
   animation: modal-in 0.14s ease;
 }
@@ -712,9 +870,9 @@ button {
   display: flex;
   flex-direction: column;
   border-radius: 16px;
-  background: linear-gradient(165deg, rgba(28, 33, 46, 0.98), rgba(14, 17, 24, 0.99));
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+  background: var(--modal-bg);
+  border: 1px solid rgba(var(--ovl), 0.1);
+  box-shadow: var(--shadow);
   overflow: hidden;
 }
 
@@ -722,7 +880,7 @@ button {
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  padding: 16px 18px 12px;
+  padding: 14px 18px 10px;
   border-bottom: 1px solid var(--line);
   flex: none;
 }
@@ -754,17 +912,17 @@ button {
   font-size: 15px;
   line-height: 1;
   color: var(--muted);
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(var(--ovl), 0.06);
+  border: 1px solid rgba(var(--ovl), 0.07);
 }
 
 .modal-close:hover {
   color: var(--text);
-  background: rgba(255, 255, 255, 0.14);
+  background: rgba(var(--ovl), 0.14);
 }
 
 .modal-body {
-  padding: 14px 18px 16px;
+  padding: 12px 18px 14px;
   overflow: auto;
   flex: 1;
   min-height: 0;
@@ -801,8 +959,8 @@ button {
 .stat {
   padding: 8px 10px;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.055);
+  background: rgba(var(--ovl), 0.04);
+  border: 1px solid rgba(var(--ovl), 0.055);
   min-width: 0;
 }
 
@@ -880,7 +1038,7 @@ button {
 .dh-table td {
   padding: 3px 0;
   color: var(--muted);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.035);
+  border-bottom: 1px solid rgba(var(--ovl), 0.035);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -955,20 +1113,20 @@ button {
   font-size: 10.5px;
   font-weight: 600;
   color: var(--muted);
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(var(--ovl), 0.06);
+  border: 1px solid rgba(var(--ovl), 0.07);
   transition: all 0.14s ease;
 }
 
 .chip:hover:not(:disabled) {
   color: var(--text);
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(var(--ovl), 0.12);
 }
 
 .chip.on {
   color: var(--accent);
-  border-color: rgba(34, 211, 238, 0.4);
-  background: rgba(34, 211, 238, 0.12);
+  border-color: rgba(var(--accent-rgb), 0.4);
+  background: rgba(var(--accent-rgb), 0.12);
 }
 
 .btn-primary {
@@ -977,9 +1135,9 @@ button {
   border-radius: 8px;
   font-size: 10.5px;
   font-weight: 650;
-  color: #04212a;
-  background: linear-gradient(180deg, #4ee0f5, #22d3ee);
-  border: 1px solid rgba(34, 211, 238, 0.5);
+  color: var(--on-accent);
+  background: var(--btn-primary-bg);
+  border: 1px solid rgba(var(--accent-rgb), 0.5);
   transition: filter 0.14s ease;
 }
 
@@ -1017,14 +1175,14 @@ button {
   letter-spacing: 0;
   text-transform: none;
   color: var(--muted);
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(var(--ovl), 0.06);
+  border: 1px solid rgba(var(--ovl), 0.07);
   transition: color 0.14s ease, background 0.14s ease;
 }
 
 .mini:hover:not(:disabled) {
   color: var(--text);
-  background: rgba(255, 255, 255, 0.13);
+  background: rgba(var(--ovl), 0.13);
 }
 
 .mini:disabled {
@@ -1051,7 +1209,7 @@ button {
 .proc-table td {
   padding: 3.4px 0;
   color: var(--muted);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.035);
+  border-bottom: 1px solid rgba(var(--ovl), 0.035);
 }
 
 .proc-table td.name {
@@ -1088,14 +1246,14 @@ button {
   font-size: 10.5px;
   font-weight: 600;
   color: var(--muted);
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(var(--ovl), 0.05);
+  border: 1px solid rgba(var(--ovl), 0.07);
   transition: color 0.14s ease, background 0.14s ease;
 }
 
 .tool-btn:hover {
   color: var(--text);
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(var(--ovl), 0.12);
 }
 
 .gear {
@@ -1105,20 +1263,20 @@ button {
   place-items: center;
   border-radius: 8px;
   color: var(--muted);
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(var(--ovl), 0.05);
+  border: 1px solid rgba(var(--ovl), 0.07);
   transition: color 0.14s ease, background 0.14s ease, border-color 0.14s ease;
 }
 
 .gear:hover {
   color: var(--text);
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(var(--ovl), 0.12);
 }
 
 .gear.on {
   color: var(--accent);
-  background: rgba(34, 211, 238, 0.12);
-  border-color: rgba(34, 211, 238, 0.4);
+  background: rgba(var(--accent-rgb), 0.12);
+  border-color: rgba(var(--accent-rgb), 0.4);
 }
 
 .modal.wide {
@@ -1128,8 +1286,8 @@ button {
 /* ---------- 分组 ---------- */
 
 .set-group + .set-group {
-  margin-top: 16px;
-  padding-top: 14px;
+  margin-top: 13px;
+  padding-top: 11px;
   border-top: 1px solid var(--line);
 }
 
@@ -1142,7 +1300,7 @@ button {
   letter-spacing: 0.12em;
   color: var(--dim);
   text-transform: uppercase;
-  margin-bottom: 10px;
+  margin-bottom: 7px;
 }
 
 .set-link {
@@ -1163,7 +1321,7 @@ button {
   display: flex;
   align-items: flex-start;
   gap: 14px;
-  padding: 7px 0;
+  padding: 6px 0;
 }
 
 /* 172px 是按法语/西班牙语留的余量：「Fréquence de collecte」这类标签比中文长得多，
@@ -1240,8 +1398,8 @@ button {
   gap: 2px;
   padding: 7px 4px 6px;
   border-radius: 9px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(var(--ovl), 0.05);
+  border: 1px solid rgba(var(--ovl), 0.07);
   transition: all 0.14s ease;
 }
 
@@ -1258,12 +1416,12 @@ button {
 }
 
 .freq-opt:hover {
-  background: rgba(255, 255, 255, 0.11);
+  background: rgba(var(--ovl), 0.11);
 }
 
 .freq-opt.on {
-  background: rgba(34, 211, 238, 0.13);
-  border-color: rgba(34, 211, 238, 0.45);
+  background: rgba(var(--accent-rgb), 0.13);
+  border-color: rgba(var(--accent-rgb), 0.45);
 }
 
 .freq-opt.on b,
@@ -1286,8 +1444,8 @@ button {
   gap: 3px;
   padding: 7px 2px 6px;
   border-radius: 9px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(var(--ovl), 0.05);
+  border: 1px solid rgba(var(--ovl), 0.07);
   transition: all 0.14s ease;
 }
 
@@ -1305,12 +1463,12 @@ button {
 }
 
 .ret-opt:hover {
-  background: rgba(255, 255, 255, 0.11);
+  background: rgba(var(--ovl), 0.11);
 }
 
 .ret-opt.on {
-  background: rgba(34, 211, 238, 0.13);
-  border-color: rgba(34, 211, 238, 0.45);
+  background: rgba(var(--accent-rgb), 0.13);
+  border-color: rgba(var(--accent-rgb), 0.45);
 }
 
 .ret-opt.on b {
@@ -1318,7 +1476,63 @@ button {
 }
 
 .ret-opt.on span {
-  color: rgba(34, 211, 238, 0.75);
+  color: rgba(var(--accent-rgb), 0.75);
+}
+
+/* ---------- 主题三选一 ---------- */
+
+.theme-opts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.theme-opt {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 6px;
+  border-radius: 9px;
+  font-size: 11px;
+  color: var(--muted);
+  background: rgba(var(--ovl), 0.05);
+  border: 1px solid rgba(var(--ovl), 0.07);
+  white-space: nowrap;
+  transition: all 0.14s ease;
+}
+
+.theme-opt:hover {
+  background: rgba(var(--ovl), 0.11);
+  color: var(--text);
+}
+
+.theme-opt.on {
+  color: var(--accent);
+  background: rgba(var(--accent-rgb), 0.13);
+  border-color: rgba(var(--accent-rgb), 0.45);
+  font-weight: 650;
+}
+
+/* 色块画的是「这个选项长什么样」，所以不能用主题变量——它得同时展示两种主题 */
+.theme-opt i {
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
+  border: 1px solid rgba(120, 130, 150, 0.45);
+  flex: none;
+}
+
+.theme-opt i.auto {
+  background: linear-gradient(135deg, #1b2030 0 50%, #f2f5fa 50% 100%);
+}
+
+.theme-opt i.dark {
+  background: #1b2030;
+}
+
+.theme-opt i.light {
+  background: #f2f5fa;
 }
 
 /* ---------- 界面语言九宫格 ---------- */
@@ -1335,8 +1549,8 @@ button {
   border-radius: 9px;
   font-size: 11px;
   color: var(--muted);
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(var(--ovl), 0.05);
+  border: 1px solid rgba(var(--ovl), 0.07);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1344,14 +1558,14 @@ button {
 }
 
 .lang-opt:hover {
-  background: rgba(255, 255, 255, 0.11);
+  background: rgba(var(--ovl), 0.11);
   color: var(--text);
 }
 
 .lang-opt.on {
   color: var(--accent);
-  background: rgba(34, 211, 238, 0.13);
-  border-color: rgba(34, 211, 238, 0.45);
+  background: rgba(var(--accent-rgb), 0.13);
+  border-color: rgba(var(--accent-rgb), 0.45);
   font-weight: 650;
 }
 
@@ -1374,19 +1588,19 @@ button {
   text-align: right;
   font-variant-numeric: tabular-nums;
   color: var(--text);
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: rgba(var(--ovl), 0.06);
+  border: 1px solid rgba(var(--ovl), 0.09);
   outline: none;
   transition: border-color 0.14s ease, background 0.14s ease;
 }
 
 .inline-input input:focus {
-  background: rgba(34, 211, 238, 0.08);
-  border-color: rgba(34, 211, 238, 0.5);
+  background: rgba(var(--accent-rgb), 0.08);
+  border-color: rgba(var(--accent-rgb), 0.5);
 }
 
 .inline-input input.bad {
-  border-color: rgba(248, 113, 113, 0.55);
+  border-color: rgba(var(--danger-rgb), 0.55);
 }
 
 .chip.tiny {
@@ -1407,8 +1621,8 @@ button {
   width: 38px;
   height: 22px;
   border-radius: 11px;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: rgba(var(--ovl), 0.1);
+  border: 1px solid rgba(var(--ovl), 0.09);
   transition: background 0.18s ease, border-color 0.18s ease;
 }
 
@@ -1424,8 +1638,8 @@ button {
 }
 
 .switch.on {
-  background: rgba(34, 211, 238, 0.28);
-  border-color: rgba(34, 211, 238, 0.5);
+  background: rgba(var(--accent-rgb), 0.28);
+  border-color: rgba(var(--accent-rgb), 0.5);
 }
 
 .switch.on i {
@@ -1458,8 +1672,8 @@ button {
 .hist-card {
   padding: 9px 10px 6px;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.035);
-  border: 1px solid rgba(255, 255, 255, 0.055);
+  background: rgba(var(--ovl), 0.035);
+  border: 1px solid rgba(var(--ovl), 0.055);
 }
 
 .hist-card-h {
@@ -1546,8 +1760,8 @@ button {
   gap: 2px;
   padding: 2px;
   border-radius: 7px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(var(--ovl), 0.05);
+  border: 1px solid rgba(var(--ovl), 0.06);
 }
 
 .sort-tabs button {
@@ -1567,5 +1781,5 @@ button {
 
 .sort-tabs button.on {
   color: var(--accent);
-  background: rgba(34, 211, 238, 0.14);
+  background: rgba(var(--accent-rgb), 0.14);
 }

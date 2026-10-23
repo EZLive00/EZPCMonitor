@@ -7,10 +7,12 @@ import { Ring, Sparkline } from "./components/Charts";
 import { useMetrics } from "./lib/useMetrics";
 import { splitRate, tempColor } from "./lib/format";
 import { initLocale, useI18n } from "./i18n";
+import { initTheme } from "./lib/theme";
 import type { WidgetMode } from "./lib/types";
 import "./styles.css";
 
 initLocale();
+initTheme();
 
 /** 从 localStorage 取上次的不透明度；真正的效果由 Rust 改 NSWindow.alphaValue 实现 */
 function storedOpacity(): number {
@@ -274,8 +276,8 @@ export default function Widget() {
       </div>
 
       <div className="w-main" data-tauri-drag-region>
-        <Ring id="rg-cpu" value={cpu} label="CPU" from="#22d3ee" to="#0e7490" />
-        <Ring id="rg-mem" value={memPct} label="MEM" from="#a78bfa" to="#6d28d9" />
+        <Ring id="rg-cpu" value={cpu} label="CPU" from="var(--c-cpu)" to="var(--c-cpu-2)" />
+        <Ring id="rg-mem" value={memPct} label="MEM" from="var(--c-mem)" to="var(--c-mem-2)" />
         <div className="w-side" data-tauri-drag-region>
           <div className="w-temp">
             <span
@@ -296,7 +298,7 @@ export default function Widget() {
           id="w-spark"
           height={34}
           minMax={20}
-          color="#22d3ee"
+          color="var(--c-cpu)"
         />
       </div>
 
@@ -310,7 +312,7 @@ export default function Widget() {
         </span>
         <span className="push">
           <span style={{ color: "var(--dim)" }}>DISK</span>{" "}
-          <b style={{ color: diskPct > 90 ? "var(--danger)" : "rgba(232,237,247,.92)" }}>
+          <b style={{ color: diskPct > 90 ? "var(--danger)" : "var(--text)" }}>
             {Math.round(diskPct)}%
           </b>
         </span>

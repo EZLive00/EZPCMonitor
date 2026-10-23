@@ -23,12 +23,12 @@ type Metric = {
 };
 
 const METRICS: Metric[] = [
-  { key: "cpu", titleKey: "hist.mCpu", color: "#22d3ee", fmt: (v) => `${v.toFixed(0)}%` },
-  { key: "mem", titleKey: "hist.mMem", color: "#a78bfa", fmt: (v) => `${v.toFixed(0)}%` },
-  { key: "temp", titleKey: "hist.mTemp", color: "#fbbf24", fmt: (v) => `${v.toFixed(0)}°C` },
-  { key: "rx", titleKey: "hist.mRx", color: "#38bdf8", fmt: (v) => rate(v) },
-  { key: "disk", titleKey: "hist.mDisk", color: "#34d399", fmt: (v) => rate(v) },
-  { key: "gpu", titleKey: "hist.mGpu", color: "#c084fc", fmt: (v) => `${v.toFixed(0)}%` },
+  { key: "cpu", titleKey: "hist.mCpu", color: "var(--c-cpu)", fmt: (v) => `${v.toFixed(0)}%` },
+  { key: "mem", titleKey: "hist.mMem", color: "var(--c-mem)", fmt: (v) => `${v.toFixed(0)}%` },
+  { key: "temp", titleKey: "hist.mTemp", color: "var(--c-temp)", fmt: (v) => `${v.toFixed(0)}°C` },
+  { key: "rx", titleKey: "hist.mRx", color: "var(--c-rx)", fmt: (v) => rate(v) },
+  { key: "disk", titleKey: "hist.mDisk", color: "var(--c-disk)", fmt: (v) => rate(v) },
+  { key: "gpu", titleKey: "hist.mGpu", color: "var(--c-gpu)", fmt: (v) => `${v.toFixed(0)}%` },
 ];
 
 /**

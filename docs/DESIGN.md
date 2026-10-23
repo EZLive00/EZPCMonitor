@@ -352,7 +352,7 @@ macOS 的 `ioreg` 方案已在本项目实现并验证可用（Apple M 系列返
 | `set_want_procs` | `on: bool` | — | 按需采集进程 |
 | `disk_health` | `force?: bool` | `DiskHealth[]` | 硬盘 SMART，60s 缓存，`force` 跳过缓存 |
 | `disk_bench` | `mount, sizeMb?` | `BenchResult` | 顺序读写测速（async，几秒级 IO） |
-| `get_settings` | — | `Settings` | 采集间隔 + 历史开关 + 保留时长 + 界面语言 |
+| `get_settings` | — | `Settings` | 采集间隔 + 历史开关 + 保留时长 + 界面语言 + 主题 |
 | `update_settings` | `patch` | `Settings` | 只传要改的项；夹取 → 落盘 → 广播 `settings:changed` → 刷新托盘 |
 | `history_stats` | — | `HistoryStats` | 条数、占用、实测每条字节数、时间跨度、各档预设 |
 | `history_range` | `from?: u64` | `Point[]` | 取历史点，缺省按保留时长 |
@@ -382,7 +382,8 @@ macOS 的 `ioreg` 方案已在本项目实现并验证可用（Apple M 系列返
   "intervalMs": 5000,
   "historyEnabled": true,
   "historyRetentionSecs": 86400,
-  "language": "auto"
+  "language": "auto",
+  "theme": "auto"
 }
 ```
 
@@ -406,6 +407,32 @@ SMART 属性表刻意只做中英两种：`Percentage Used` 这类名字在 smar
 里本来就是英文，硬翻反而对不上号。语言变更时后端会清掉 `diskhealth` 的缓存，
 否则会看到一门语言的界面配另一门语言的表格（缓存里存的是格式化好的字符串）。
 
+### 7.5 主题
+
+`theme` 取 `auto` / `dark` / `light`，与 `language` 同构：真值在 Rust，
+前端镜像，`auto` 由前端监听 `prefers-color-scheme` 解析（WebView 的能力，
+Rust 侧看不到它的变化）。
+
+配色不用第二套样式表，而是**一组变量覆盖两次**：
+
+| 变量 | 深色 | 浅色 | 用途 |
+|---|---|---|---|
+| `--ovl` | `255,255,255` | `16,24,40` | 所有半透明面板的叠加层基色 |
+| `--text-rgb` | `232,237,247` | `16,24,40` | 半透明文字 |
+| `--card-bg` | 白 4.5%→1.8% | `#fff` → `#fbfcfe` | 卡片底 |
+| `--card-shadow` | `none` | 两层淡投影 | 白底靠投影分层 |
+| `--page` | 深蓝径向渐变 | 白→淡蓝径向渐变 | 主面板背景 |
+| `--scrim` | 黑 62% | 墨蓝 30% | 弹窗遮罩 |
+| `--c-*` | 亮一档 | 深一档 | 图表曲线（1.6px 在白底会糊） |
+
+`rgba(var(--ovl), α)` 的妙处是同一个 α 在两种主题下都成立——叠加方向反了过来，
+深色是提亮、浅色是压暗。切换只改 `<html data-theme>`，不给组件传色值。
+
+浅色值在 CSS 里出现两次（`:root[data-theme="light"]` 与
+`@media (prefers-color-scheme: light)`），第二份只为**首帧**：
+`get_settings` 回来之前页面上还没有 `data-theme`，否则浅色系统会先闪一下深色。
+原生标题栏由 `app.set_theme()` 单独同步，`auto` 时传 `None` 交还系统。
+
 ---
 
 ## 8. 工程结构
@@ -420,7 +447,7 @@ EZPcMonitor/
 │   ├── components/Charts.tsx   Ring / Sparkline / Meter
 │   ├── components/DiskStatus.tsx  一级页面的状态摘要
 │   ├── components/DiskDetail.tsx  二级详情弹窗（属性表 / 曲线 / 测速）
-│   ├── components/SettingsModal.tsx  设置弹窗（监控 / 历史 / 关于）
+│   ├── components/SettingsModal.tsx  设置弹窗（监控 / 通用 / 历史 / 关于）
 │   ├── components/HistoryModal.tsx   历史回溯（时间窗 + 多指标曲线）
 │   ├── components/HistoryChart.tsx   带刻度与时间轴的历史曲线
 │   ├── i18n/
@@ -433,8 +460,9 @@ EZPcMonitor/
 │   │   ├── useMetrics.ts   事件订阅 Hook + useDiskHealth
 │   │   ├── useSettings.ts  设置镜像 + 弹层关闭逻辑
 │   │   ├── useHistory.ts   历史拉取 + 分桶降采样
+│   │   ├── theme.ts        深色/浅色 store（写 data-theme，auto 跟系统）
 │   │   └── format.ts       bytes / bytesSI / rate / 阈值配色
-│   └── styles.css          设计系统 + 两套页面样式
+│   └── styles.css          设计系统 + 两套页面样式 + 深浅两套配色变量
 ├── src-tauri/
 │   ├── src/
 │   │   ├── lib.rs          Tauri 装配、命令、托盘
@@ -508,7 +536,8 @@ steps:
 - [x] 历史回溯弹窗：时间窗切换 + 六项指标曲线 + 峰值/均值
 - [x] 多语言：简中 / 繁中 / 英 / 日 / 韩 / 法 / 西，默认跟随系统（ADR-013）
 - [x] 托盘菜单、窗口标题、SMART 属性表同步切换语言
-- [ ] 更多设置项（开机自启 / 主题 / 告警阈值）
+- [x] 深色 / 浅色主题，默认跟随系统，可手动固定（ADR-014）
+- [ ] 更多设置项（开机自启 / 告警阈值）
 
 ### 磁盘工具（进行中）
 - [x] 磁盘健康 / 寿命 / 完整 SMART 属性表（`diskhealth.rs`）
@@ -530,7 +559,7 @@ steps:
 - [ ] 温度权限引导（Windows 管理员模式 + LHM sidecar）
 - [ ] 悬浮窗位置/尺寸持久化，多显示器 DPI 处理
 - [ ] 阈值告警（温度 > 90°C 变色 / 系统通知）
-- [ ] 浅色主题（跟随系统 / 手动切换）
+- [x] 浅色主题（跟随系统 / 手动切换）
 - [ ] 全局快捷键（显示/隐藏/切换形态）
 - [ ] 历史数据导出 CSV
 

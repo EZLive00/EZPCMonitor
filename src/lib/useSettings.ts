@@ -20,6 +20,7 @@ export const FALLBACK: AppSettings = {
   historyEnabled: false,
   historyRetentionSecs: 86_400,
   language: "auto",
+  theme: "auto",
 };
 
 /**

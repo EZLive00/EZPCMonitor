@@ -42,6 +42,9 @@ pub struct AppState {
     /// 界面语言：`auto` 或 `i18n::LANGS` 里的一项（用户的选择，不是解析结果）。
     /// 托盘菜单要按它重画，前端拿它挑字典。
     pub language: Mutex<String>,
+    /// 配色主题：`auto` / `dark` / `light`。后端只存不改，解析在前端做
+    /// （`prefers-color-scheme` 是 WebView 的能力，Rust 侧看不到它的变化）。
+    pub theme: Mutex<String>,
     /// 托盘里点了「设置…」但主面板是刚拉起来的——这时前端还没挂上监听，
     /// 事件会丢。留个标记，等前端启动时主动来取一次。
     pub open_settings: AtomicBool,
@@ -62,6 +65,7 @@ impl Default for AppState {
             history_retention: Arc::new(AtomicU64::new(settings::DEFAULT_RETENTION)),
             recorder: Arc::new(Mutex::new(None)),
             language: Mutex::new(settings::DEFAULT_LANG.to_string()),
+            theme: Mutex::new(settings::DEFAULT_THEME.to_string()),
             open_settings: AtomicBool::new(false),
         }
     }
@@ -104,6 +108,7 @@ struct SettingsPatch {
     history_enabled: Option<bool>,
     history_retention_secs: Option<u64>,
     language: Option<String>,
+    theme: Option<String>,
 }
 
 fn current_settings(state: &AppState) -> settings::Settings {
@@ -112,6 +117,7 @@ fn current_settings(state: &AppState) -> settings::Settings {
         history_enabled: state.history_enabled.load(Ordering::Relaxed),
         history_retention_secs: state.history_retention.load(Ordering::Relaxed),
         language: state.language.lock().unwrap().clone(),
+        theme: state.theme.lock().unwrap().clone(),
     }
 }
 
@@ -144,6 +150,7 @@ fn update_settings(app: tauri::AppHandle, patch: SettingsPatch) -> settings::Set
                     .unwrap_or(cur.history_retention_secs),
             ),
             language: settings::clamp_lang(patch.language.as_deref().unwrap_or(&cur.language)),
+            theme: settings::clamp_theme(patch.theme.as_deref().unwrap_or(&cur.theme)),
         };
         state.interval_ms.store(next.interval_ms, Ordering::Relaxed);
         state
@@ -153,6 +160,7 @@ fn update_settings(app: tauri::AppHandle, patch: SettingsPatch) -> settings::Set
             .history_retention
             .store(next.history_retention_secs, Ordering::Relaxed);
         *state.language.lock().unwrap() = next.language.clone();
+        *state.theme.lock().unwrap() = next.theme.clone();
         let changed = next.language != cur.language;
         (next, changed)
     };
@@ -164,7 +172,21 @@ fn update_settings(app: tauri::AppHandle, patch: SettingsPatch) -> settings::Set
     let _ = app.emit("settings:changed", &next);
     refresh_tray(&app);
     sync_window_titles(&app);
+    apply_native_theme(&app, &next.theme);
     next
+}
+
+/// 原生标题栏也要跟着主题走。
+///
+/// 界面配色是 CSS 画的，标题栏却是 macOS 画的——不告诉它，浅色界面上就会顶
+/// 一条深色标题栏。`None` 表示交还给系统，`auto` 时用它。
+fn apply_native_theme(app: &tauri::AppHandle, choice: &str) {
+    let theme = match choice {
+        "dark" => Some(tauri::Theme::Dark),
+        "light" => Some(tauri::Theme::Light),
+        _ => None,
+    };
+    app.set_theme(theme);
 }
 
 /// 主面板标题栏里的「主面板」也要跟着语言变——它露在最显眼的地方。
@@ -571,6 +593,8 @@ pub fn run() {
                     .history_retention
                     .store(saved.history_retention_secs, Ordering::Relaxed);
                 *state.language.lock().unwrap() = saved.language.clone();
+                *state.theme.lock().unwrap() = saved.theme.clone();
+                apply_native_theme(app.handle(), &saved.theme);
 
                 // 历史文件放在数据目录（不是配置目录）：这是数据，不是偏好
                 if let Ok(dir) = app.path().app_data_dir() {
