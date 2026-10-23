@@ -6,13 +6,14 @@
 //! 3. 所有平台差异收敛在 sysinfo 的 Components 实现里，本层只做归一化与平滑。
 
 use serde::Serialize;
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use sysinfo::{Components, DiskRefreshKind, Disks, Networks, ProcessesToUpdate, System};
 
 use crate::gpu;
+use crate::procstats;
 
 /// 300 个点：1s 一拍约 5 分钟，10s 一拍就是 50 分钟。
 /// 按点数而不是按时长截断——采集间隔是可调的，按时长算每次改频率都得重算容量。
@@ -173,6 +174,8 @@ pub struct Collector {
     nets: Networks,
     comps: Components,
     want_procs: Arc<AtomicBool>,
+    /// 是否记录高占用程序的历史。关掉时连进程表都不刷新。
+    record_procs: Arc<AtomicBool>,
     host: HostInfo,
     last_net: Instant,
     last_io: Instant,
@@ -181,15 +184,38 @@ pub struct Collector {
     last_storage: Instant,
     last_temps: Instant,
     last_procs: Instant,
+    last_proc_sample: Instant,
+    /// 上一拍攒下的按名聚合结果，等调用方取走落盘
+    pending: Option<Vec<procstats::Entry>>,
+    /// pid → 上一拍读到的累计值。CPU 时间和磁盘读写都是「自进程启动以来」的
+    /// 累计量，自己差分才拿得到这一拍的速率——直接读 sysinfo 的 `cpu_usage()`
+    /// 不行，它算的是「距上次刷新」，而刷新节奏在主面板打开时会变成 3 秒。
+    prev: HashMap<u32, PrevSample>,
     gpu_rx: Option<std::sync::mpsc::Receiver<gpu::GpuInfo>>,
     gpu_last: Option<gpu::GpuInfo>,
 }
 
+/// 每拍要差分的三个累计量。
+#[derive(Clone, Copy)]
+struct PrevSample {
+    /// CPU 毫秒（多核机器上会超过墙钟时间）
+    cpu_ms: u64,
+    read: u64,
+    written: u64,
+}
+
 impl Collector {
-    pub fn new(want_procs: Arc<AtomicBool>) -> Self {
+    pub fn new(want_procs: Arc<AtomicBool>, record_procs: Arc<AtomicBool>) -> Self {
         let mut sys = System::new();
         sys.refresh_cpu_all();
         sys.refresh_memory();
+        // 记录历史时先刷一次进程表并把累计值存成基准：这样 30 秒后的第一次
+        // 采样就有真实的差分可用，而不是一排 0。
+        let mut prev = HashMap::new();
+        if record_procs.load(Ordering::Relaxed) {
+            sys.refresh_processes(ProcessesToUpdate::All, true);
+            prev = snapshot_prev(&sys);
+        }
 
         let mut disks = Disks::new_with_refreshed_list();
         disks.refresh(true);
@@ -214,15 +240,24 @@ impl Collector {
             nets,
             comps,
             want_procs,
+            record_procs,
             host,
             last_net: Instant::now(),
             last_io: Instant::now(),
             last_storage: Instant::now(),
             last_temps: Instant::now(),
             last_procs: Instant::now(),
+            last_proc_sample: Instant::now(),
+            pending: None,
+            prev,
             gpu_rx,
             gpu_last: None,
         }
+    }
+
+    /// 取走这一拍的高占用聚合结果（没有到采样时刻就是 `None`）。
+    pub fn take_pending(&mut self) -> Option<Vec<procstats::Entry>> {
+        self.pending.take()
     }
 
     pub fn tick(&mut self) -> Snapshot {
@@ -241,6 +276,9 @@ impl Collector {
                 .refresh_specifics(true, DiskRefreshKind::nothing().with_storage().with_kind());
             self.last_storage = now;
         }
+        // 进程表有两种用途，取并集：主面板要 3 秒一刷做实时榜，
+        // 历史要 30 秒一拍做落盘聚合。以前只在面板打开时刷，等于面板一关
+        // 就再也答不上「刚才谁在吃 CPU」——那正是历史最想回答的问题。
         let panel_open = self.want_procs.load(Ordering::Relaxed);
         let do_io = panel_open && now.duration_since(self.last_io) >= Duration::from_secs(2);
         if do_io {
@@ -258,9 +296,23 @@ impl Collector {
             self.last_temps = now;
         }
 
-        if panel_open && now.duration_since(self.last_procs) >= Duration::from_secs(3) {
+        // 进程表有两种用途，取并集：主面板要 3 秒一刷做实时榜，
+        // 历史要 30 秒一拍做落盘聚合。以前只在面板打开时刷，等于面板一关
+        // 就再也答不上「刚才谁在吃 CPU」——那正是历史最想回答的问题。
+        let sample_due = self.record_procs.load(Ordering::Relaxed)
+            && now.duration_since(self.last_proc_sample)
+                >= Duration::from_secs(procstats::SAMPLE_SECS);
+        if sample_due || (panel_open && now.duration_since(self.last_procs) >= Duration::from_secs(3))
+        {
             self.sys.refresh_processes(ProcessesToUpdate::All, true);
             self.last_procs = now;
+        }
+        if sample_due {
+            let secs = now.duration_since(self.last_proc_sample).as_secs_f64().max(1.0);
+            self.last_proc_sample = now;
+            self.pending = Some(self.aggregate_procs(secs));
+        } else {
+            self.pending = None;
         }
 
         // ---- CPU ----
@@ -425,6 +477,62 @@ impl Collector {
         }
     }
 
+    /// 把**全量**进程表按名字合并成高占用记录。
+    ///
+    /// 必须在全表上合并：上面 `Snapshot.procs` 只留了 CPU 前 20 ∪ 内存前 20，
+    /// 拿那份数据合并的话，Chrome 的第 13 个渲染进程会被丢掉，加起来永远偏小。
+    fn aggregate_procs(&mut self, secs: f64) -> Vec<procstats::Entry> {
+        let mut acc: HashMap<String, [f64; 3]> = HashMap::with_capacity(64);
+        let mut prev: HashMap<u32, PrevSample> = HashMap::with_capacity(self.prev.len());
+
+        for (pid, p) in self.sys.processes() {
+            let pid = pid.as_u32();
+            let d = p.disk_usage();
+            let cur = PrevSample {
+                cpu_ms: p.accumulated_cpu_time(),
+                read: d.read_bytes,
+                written: d.written_bytes,
+            };
+            // 首拍没有基准、进程刚起来、或者 pid 被复用，都按 0 算，不要算出一个负值
+            let (dcpu, dio) = match self.prev.get(&pid) {
+                Some(b) => (
+                    cur.cpu_ms.saturating_sub(b.cpu_ms),
+                    cur.read.saturating_sub(b.read) + cur.written.saturating_sub(b.written),
+                ),
+                None => (0, 0),
+            };
+            prev.insert(pid, cur);
+
+            let e = acc
+                .entry(p.name().to_string_lossy().to_string())
+                .or_insert([0.0; 3]);
+            // CPU 毫秒 → 百分比：100% = 占满一个核，跟面板上那个数字同一套口径
+            e[0] += dcpu as f64 / secs / 10.0;
+            e[1] += p.memory() as f64;
+            e[2] += dio as f64;
+        }
+        self.prev = prev;
+
+        let mut out: Vec<procstats::Entry> = acc
+            .into_iter()
+            .map(|(name, v)| procstats::Entry {
+                name,
+                cpu: round1(v[0] as f32),
+                mem_mb: (v[1] / 1_048_576.0).round() as u32,
+                io_kb: (v[2] / 1024.0 / secs).round() as u32,
+            })
+            .collect();
+        // HashMap 的遍历顺序每拍都不一样，排一下：落盘文件能直接看懂，
+        // 也不至于每次打开都长得不一样
+        out.sort_by(|a, b| {
+            b.cpu
+                .partial_cmp(&a.cpu)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| a.name.cmp(&b.name))
+        });
+        out
+    }
+
     fn collect_temps(&self) -> Vec<TempInfo> {
         let mut raw: Vec<TempInfo> = self
             .comps
@@ -463,6 +571,24 @@ impl Collector {
         raw.truncate(8);
         raw
     }
+}
+
+/// 拍下当前全表的累计值，作为下一次差分的基准。
+fn snapshot_prev(sys: &System) -> HashMap<u32, PrevSample> {
+    sys.processes()
+        .iter()
+        .map(|(pid, p)| {
+            let d = p.disk_usage();
+            (
+                pid.as_u32(),
+                PrevSample {
+                    cpu_ms: p.accumulated_cpu_time(),
+                    read: d.read_bytes,
+                    written: d.written_bytes,
+                },
+            )
+        })
+        .collect()
 }
 
 /// 传感器标签打分：越高越可能是 CPU 主温度

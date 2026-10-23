@@ -441,6 +441,8 @@ export default function Dashboard() {
         <HistoryModal
           retentionSecs={settings.historyRetentionSecs}
           enabled={settings.historyEnabled}
+          host={snap.host.name}
+          os={snap.host.os}
           onClose={() => setHistoryOpen(false)}
           onOpenSettings={() => {
             setHistoryOpen(false);

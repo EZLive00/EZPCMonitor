@@ -57,7 +57,7 @@ fn main() {
     println!("  温度传感器     avg {:6.2}   max {:6.2}   <-- 热点", temp, temp_max);
     println!("  进程列表       avg {:6.2}   max {:6.2}", proc_, proc_max);
 
-    let mut c = Collector::new(Arc::new(AtomicBool::new(false)));
+    let mut c = Collector::new(Arc::new(AtomicBool::new(false)), Arc::new(AtomicBool::new(false)));
     for _ in 0..3 {
         c.tick();
         std::thread::sleep(Duration::from_millis(1100));
@@ -68,7 +68,7 @@ fn main() {
     println!("── 合成一帧 ────────────────────────────────────");
     println!("  悬浮窗模式     avg {:6.2}   max {:6.2}   → 1Hz 约占单核 {:.2}%", tick, tick_max, tick / 10.0);
 
-    let mut cp = Collector::new(Arc::new(AtomicBool::new(true)));
+    let mut cp = Collector::new(Arc::new(AtomicBool::new(true)), Arc::new(AtomicBool::new(true)));
     cp.tick();
     let (tickp, _) = time_it(8, || {
         cp.tick();

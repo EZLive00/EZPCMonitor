@@ -12,6 +12,7 @@ pub mod gpu;
 pub mod history;
 pub mod i18n;
 pub mod metrics;
+pub mod procstats;
 pub mod settings;
 
 use metrics::{Collector, History, Snapshot};
@@ -39,6 +40,8 @@ pub struct AppState {
     pub history_retention: Arc<AtomicU64>,
     /// 历史文件写入器。采集线程写，命令读/清空，所以套一层锁。
     pub recorder: Arc<Mutex<Option<history::Recorder>>>,
+    /// 高占用程序榜的写入器（按小时分片的目录）。跟曲线共用开关和保留时长。
+    pub proc_recorder: Arc<Mutex<Option<procstats::Recorder>>>,
     /// 界面语言：`auto` 或 `i18n::LANGS` 里的一项（用户的选择，不是解析结果）。
     /// 托盘菜单要按它重画，前端拿它挑字典。
     pub language: Mutex<String>,
@@ -64,6 +67,7 @@ impl Default for AppState {
             history_enabled: Arc::new(AtomicBool::new(settings::DEFAULT_HISTORY_ON)),
             history_retention: Arc::new(AtomicU64::new(settings::DEFAULT_RETENTION)),
             recorder: Arc::new(Mutex::new(None)),
+            proc_recorder: Arc::new(Mutex::new(None)),
             language: Mutex::new(settings::DEFAULT_LANG.to_string()),
             theme: Mutex::new(settings::DEFAULT_THEME.to_string()),
             open_settings: AtomicBool::new(false),
@@ -215,6 +219,10 @@ struct HistoryStats {
     bytes_per_record: u64,
     oldest: u64,
     newest: u64,
+    /// 高占用程序榜那部分：节奏、实测占用、空目录时的经验值
+    proc_sample_secs: u64,
+    proc_bytes: u64,
+    proc_bytes_per_sample: u64,
 }
 
 #[tauri::command]
@@ -235,6 +243,13 @@ fn history_stats(state: tauri::State<'_, AppState>) -> HistoryStats {
             None => (0, 0, history::NOMINAL_BYTES, 0, 0),
         }
     };
+    let proc_bytes = state
+        .proc_recorder
+        .lock()
+        .unwrap()
+        .as_ref()
+        .map(|r| r.bytes())
+        .unwrap_or(0);
     HistoryStats {
         enabled: state.history_enabled.load(Ordering::Relaxed),
         retention_secs: state.history_retention.load(Ordering::Relaxed),
@@ -247,6 +262,9 @@ fn history_stats(state: tauri::State<'_, AppState>) -> HistoryStats {
         bytes_per_record: bpr,
         oldest,
         newest,
+        proc_sample_secs: procstats::SAMPLE_SECS,
+        proc_bytes,
+        proc_bytes_per_sample: procstats::NOMINAL_BYTES_PER_SAMPLE,
     }
 }
 
@@ -263,10 +281,103 @@ fn history_range(state: tauri::State<'_, AppState>, from: Option<u64>) -> Vec<hi
         .unwrap_or_default()
 }
 
+/// 高占用程序榜。
+///
+/// 一次扫完 CPU / 内存 / 磁盘三个维度，前端切维度、改排序都不用再回来读文件。
+/// 读几十 MB 要几十毫秒，所以走 async——同步命令会跑在主线程上，界面会顿一下。
+#[tauri::command(async)]
+fn proc_leaders(state: tauri::State<'_, AppState>, from: Option<u64>) -> procstats::Leaders {
+    let from = from.unwrap_or_else(|| {
+        history::now_secs().saturating_sub(state.history_retention.load(Ordering::Relaxed))
+    });
+    state
+        .proc_recorder
+        .lock()
+        .unwrap()
+        .as_ref()
+        .map(|r| r.leaders(from))
+        .unwrap_or_default()
+}
+
 #[tauri::command]
 fn clear_history(state: tauri::State<'_, AppState>) {
     if let Some(r) = state.recorder.lock().unwrap().as_mut() {
         r.clear();
+    }
+    if let Some(r) = state.proc_recorder.lock().unwrap().as_mut() {
+        r.clear();
+    }
+}
+
+/// 报告图的落地文件名：只留最后一段路径，挡住 `../` 之类跑出目录的写法；
+/// 空名、点开头、超长名一律退回默认名。重名自动加 `-2`、`-3`，不覆盖旧图。
+fn report_path(dir: &std::path::Path, name: &str) -> std::path::PathBuf {
+    let mut base = name.rsplit(['/', '\\']).next().unwrap_or("").to_string();
+    if base.is_empty() || base.starts_with('.') || base.len() > 120 {
+        base = "EZPcMonitor-report.png".into();
+    }
+
+    let stem = std::path::Path::new(&base)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("EZPcMonitor-report")
+        .to_string();
+    let mut path = dir.join(&base);
+    for n in 2..1000 {
+        if !path.exists() {
+            break;
+        }
+        path = dir.join(format!("{stem}-{n}.png"));
+    }
+    path
+}
+
+/// 保存报告图。
+///
+/// 默认落在下载目录而不是弹保存对话框：点「报告」的人就是想拿到一个文件，
+/// 多一步选目录只是拦路。重名自动加序号，不覆盖已有的图。
+#[tauri::command]
+fn save_report(app: tauri::AppHandle, png: Vec<u8>, name: String) -> Result<String, String> {
+    let dir = app
+        .path()
+        .download_dir()
+        .or_else(|_| app.path().app_data_dir())
+        .map_err(|e| e.to_string())?;
+    let _ = std::fs::create_dir_all(&dir);
+
+    let path = report_path(&dir, &name);
+    std::fs::write(&path, &png).map_err(|e| e.to_string())?;
+    Ok(path.to_string_lossy().to_string())
+}
+
+/// 把已保存的 PNG 放进系统剪贴板。
+///
+/// WebView 里的 `navigator.clipboard.write` 在 WKWebView 上时灵时不灵
+/// （还要求处在用户手势的同步栈里，而我们生成图片是异步的），所以走系统通道。
+/// macOS 用 osascript 读文件塞进剪贴板，其它平台返回 unsupported，
+/// 前端会退回「复制文件路径」。
+#[tauri::command]
+fn copy_image(path: String) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        let quoted = path.replace('\\', "\\\\").replace('"', "\\\"");
+        let script =
+            format!("set the clipboard to (read (POSIX file \"{quoted}\") as «class PNGf»)");
+        let out = std::process::Command::new("osascript")
+            .arg("-e")
+            .arg(&script)
+            .output()
+            .map_err(|e| e.to_string())?;
+        if out.status.success() {
+            Ok(())
+        } else {
+            Err(String::from_utf8_lossy(&out.stderr).to_string())
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = path;
+        Err("unsupported".into())
     }
 }
 
@@ -558,7 +669,10 @@ pub fn run() {
             get_locale,
             history_stats,
             history_range,
+            proc_leaders,
             clear_history,
+            save_report,
+            copy_image,
             take_open_settings,
             set_widget_mode,
             sync_widget_prefs,
@@ -582,7 +696,7 @@ pub fn run() {
 
             // 先恢复上次的设置，再启动采集线程——否则第一拍会用默认值跑，
             // 用户改过的 5s 会先被覆盖成 1s 一拍。
-            let (interval, hist_on, retention, recorder) = {
+            let (interval, hist_on, retention, recorder, proc_recorder) = {
                 let saved = settings::load(app.handle());
                 let state = app.state::<AppState>();
                 state.interval_ms.store(saved.interval_ms, Ordering::Relaxed);
@@ -602,6 +716,11 @@ pub fn run() {
                     // 上次退出后可能已经过了保留期，启动时先剪一次
                     rec.trim(saved.history_retention_secs);
                     *state.recorder.lock().unwrap() = Some(rec);
+
+                    // 程序榜按小时分片，修剪就是删整个文件，启动时顺手清一遍
+                    let mut procs = procstats::Recorder::new(&dir.join("procs"));
+                    procs.prune(saved.history_retention_secs);
+                    *state.proc_recorder.lock().unwrap() = Some(procs);
                 }
 
                 (
@@ -609,18 +728,21 @@ pub fn run() {
                     state.history_enabled.clone(),
                     state.history_retention.clone(),
                     state.recorder.clone(),
+                    state.proc_recorder.clone(),
                 )
             };
 
             let handle = app.handle().clone();
             let main_active = app.state::<AppState>().want_procs.clone();
             std::thread::spawn(move || {
-                let mut collector = Collector::new(want_procs);
+                let mut collector = Collector::new(want_procs, hist_on.clone());
                 let mut first = true;
                 // 落盘节奏和采集节奏解耦：采集 1s 也好 10s 也好，写文件固定 10s 一条
                 let mut last_record = std::time::Instant::now()
                     .checked_sub(Duration::from_secs(history::SAMPLE_SECS))
                     .unwrap_or_else(std::time::Instant::now);
+                // 过期分片不必每拍都扫目录，10 分钟一次足够（最短保留期是 10 分钟）
+                let mut last_prune = std::time::Instant::now();
                 metrics::run_loop(
                     move || {
                         // 首帧 CPU 需要两次采样才有意义，先让 sysinfo 稳定一拍
@@ -670,6 +792,20 @@ pub fn run() {
                             if let Some(rec) = guard.as_mut() {
                                 rec.append(&row);
                                 rec.trim_if_needed(retention.load(Ordering::Relaxed));
+                            }
+                        }
+
+                        // 高占用程序榜：30 秒一拍，跟曲线共用开关和保留时长。
+                        // 采集线程已经按名字合并好了，这里只管写。
+                        if let Some(entries) = collector.take_pending() {
+                            let ret = retention.load(Ordering::Relaxed);
+                            let mut guard = proc_recorder.lock().unwrap();
+                            if let Some(rec) = guard.as_mut() {
+                                rec.append(history::now_secs(), &entries);
+                                if last_prune.elapsed() >= Duration::from_secs(600) {
+                                    last_prune = std::time::Instant::now();
+                                    rec.prune(ret);
+                                }
                             }
                         }
 
@@ -922,5 +1058,64 @@ fn refresh_tray(app: &tauri::AppHandle) {
         if let Some(tray) = app.tray_by_id("main") {
             let _ = tray.set_menu(Some(menu));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::report_path;
+    use std::path::Path;
+
+    #[test]
+    fn keeps_plain_name() {
+        let dir = Path::new("/tmp/ezpc-nonexistent");
+        assert_eq!(
+            report_path(dir, "EZPcMonitor-report-20261023-1432.png"),
+            dir.join("EZPcMonitor-report-20261023-1432.png")
+        );
+    }
+
+    #[test]
+    fn strips_directories_from_name() {
+        let dir = Path::new("/tmp/ezpc-nonexistent");
+        assert_eq!(
+            report_path(dir, "../../etc/passwd.png"),
+            dir.join("passwd.png")
+        );
+        assert_eq!(
+            report_path(dir, "C:\\Users\\x\\shot.png"),
+            dir.join("shot.png")
+        );
+    }
+
+    #[test]
+    fn falls_back_for_bad_names() {
+        let dir = Path::new("/tmp/ezpc-nonexistent");
+        for bad in ["", ".", "..", ".hidden.png", &"x".repeat(200)] {
+            assert_eq!(
+                report_path(dir, bad),
+                dir.join("EZPcMonitor-report.png"),
+                "input {bad:?} should fall back"
+            );
+        }
+    }
+
+    #[test]
+    fn numbers_collisions_instead_of_overwriting() {
+        let dir = std::env::temp_dir().join(format!("ezpc-report-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let first = report_path(&dir, "r.png");
+        assert_eq!(first, dir.join("r.png"));
+        std::fs::write(&first, b"1").unwrap();
+
+        let second = report_path(&dir, "r.png");
+        assert_eq!(second, dir.join("r-2.png"));
+        std::fs::write(&second, b"2").unwrap();
+
+        let third = report_path(&dir, "r.png");
+        assert_eq!(third, dir.join("r-3.png"));
+
+        std::fs::remove_dir_all(&dir).ok();
     }
 }

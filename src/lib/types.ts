@@ -180,4 +180,47 @@ export interface HistoryStats {
   bytesPerRecord: number;
   oldest: number;
   newest: number;
+  /** 程序榜那部分的采样节奏（秒） */
+  procSampleSecs: number;
+  /** 程序榜目录的实测占用 */
+  procBytes: number;
+  /** 空目录时每条采样占多少字节的经验值，用来估保留期占用 */
+  procBytesPerSample: number;
 }
+
+/** 一个维度（CPU / 磁盘 IO）的历史统计 */
+export interface DimStat {
+  mean: number;
+  peak: number;
+  /** 峰值出现的 unix 秒 */
+  peakTs: number;
+  /** 活跃采样占比（0~100） */
+  active: number;
+}
+
+/** 内存是存量不是流量，除了均值峰值还给首尾，用来算「这个窗口里涨了多少」 */
+export interface MemStat {
+  meanMb: number;
+  peakMb: number;
+  peakTs: number;
+  firstMb: number;
+  lastMb: number;
+}
+
+/** 历史榜里的一行：已按进程名合并 */
+export interface ProcLeader {
+  name: string;
+  /** 它出现过几次采样（缺席 = 低于门槛） */
+  samples: number;
+  cpu: DimStat;
+  mem: MemStat;
+  io: DimStat;
+}
+
+export interface ProcLeaders {
+  /** 窗口内的总采样次数（含空拍），所有均值和占比都以它为分母 */
+  total: number;
+  sampleSecs: number;
+  rows: ProcLeader[];
+}
+

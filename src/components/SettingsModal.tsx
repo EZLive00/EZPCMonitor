@@ -67,12 +67,20 @@ export function SettingsModal({ settings, update, onClose, onOpenHistory }: Prop
 
   const sampleSecs = stats?.sampleSecs ?? 10;
   const bpr = stats?.bytesPerRecord ?? 88;
+  const procSampleSecs = stats?.procSampleSecs ?? 30;
+  const procBps = stats?.procBytesPerSample ?? 300;
   const presets = stats?.presets ?? [3600, 21_600, 86_400, 604_800, 2_592_000];
   const minRetention = stats?.minRetentionSecs ?? 600;
   const maxRetention = stats?.maxRetentionSecs ?? 7_776_000;
 
-  /** 某档保留时长的预计占用 */
-  const estimate = (secs: number) => bytes((secs / sampleSecs) * bpr);
+  /**
+   * 某档保留时长的预计占用 = 曲线 + 程序榜。
+   *
+   * 曲线那条是拿实测的每条字节数算的，很准；程序榜那条只能用经验值——
+   * 每条要记几个进程，取决于当时开了多少程序，没法用一个固定值概括。
+   */
+  const estimate = (secs: number) =>
+    bytes((secs / sampleSecs) * bpr + (secs / procSampleSecs) * procBps);
 
   const ms = Number(draftMs);
   const msValid = Number.isFinite(ms) && ms * 1000 >= MIN_MS && ms * 1000 <= MAX_MS;
@@ -308,8 +316,14 @@ export function SettingsModal({ settings, update, onClose, onOpenHistory }: Prop
                 </span>
               </div>
               <div className="set-ctrl right">
-                <span className="set-value">{stats ? bytes(stats.bytes) : "—"}</span>
-                <button className="mini" onClick={clearHistory} disabled={!stats || stats.count === 0}>
+                <span className="set-value">
+                  {stats ? bytes(stats.bytes + stats.procBytes) : "—"}
+                </span>
+                <button
+                  className="mini"
+                  onClick={clearHistory}
+                  disabled={!stats || (stats.count === 0 && stats.procBytes === 0)}
+                >
                   {i.t("set.clear")}
                 </button>
               </div>

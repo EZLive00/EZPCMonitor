@@ -356,7 +356,10 @@ macOS 的 `ioreg` 方案已在本项目实现并验证可用（Apple M 系列返
 | `update_settings` | `patch` | `Settings` | 只传要改的项；夹取 → 落盘 → 广播 `settings:changed` → 刷新托盘 |
 | `history_stats` | — | `HistoryStats` | 条数、占用、实测每条字节数、时间跨度、各档预设 |
 | `history_range` | `from?: u64` | `Point[]` | 取历史点，缺省按保留时长 |
-| `clear_history` | — | — | 删掉历史文件 |
+| `proc_leaders` | `from?: u64` | `Leaders` | 程序榜：按名字合并后的 CPU/内存/磁盘统计（async，要扫一遍分片） |
+| `save_report` | `png: number[], name` | `string` | 报告图落下载目录，重名自动 `-2`、`-3`，返回绝对路径 |
+| `copy_image` | `path` | — | 把已保存的 PNG 塞进系统剪贴板（仅 macOS，其它平台返回 `unsupported`） |
+| `clear_history` | — | — | 删掉历史文件与 `procs/` 分片 |
 | `get_locale` | — | `string` | 系统语言标签（`zh-CN` / `en` / …），仅供「跟随系统」显示 |
 | `take_open_settings` | — | `bool` | 托盘点了「设置…」时，前端启动后取一次标记并清除 |
 | `set_widget_mode` | `mode: "card"\|"bar"` | — | 同时调整窗口尺寸 |
@@ -432,6 +435,53 @@ Rust 侧看不到它的变化）。
 `@media (prefers-color-scheme: light)`），第二份只为**首帧**：
 `get_settings` 回来之前页面上还没有 `data-theme`，否则浅色系统会先闪一下深色。
 原生标题栏由 `app.set_theme()` 单独同步，`auto` 时传 `None` 交还系统。
+
+### 7.6 程序榜与报告图
+
+历史曲线回答「什么时候卡的」，程序榜回答「是谁卡的」。两者共用同一个时间窗，
+数据也来自同一次采集。
+
+**存原始样本，不存统计结果。** 每 30 秒一拍（`SAMPLE_SECS`），把当拍的高占用进程
+写进 `procs/YYYY-MM-DDTHH.jsonl`。分片按 UTC 整点切，删旧数据只删整个文件，
+永远不重写——这样写入永远是纯追加。
+
+一行字典、一行样本交替出现，名字在一个分片里只写一次：
+
+```jsonl
+{"d":["Google Chrome","ezpcm","v2rayN"]}
+{"t":1792767565,"p":[[0,12.5,412,0],[1,3.1,88,1024]]}
+```
+
+`p` 里是 `[名字 id, CPU%, 内存 MB, 磁盘 KB/s]`。实测一拍约 600 字节
+（15 个进程），30 天约 50 MB；设置页按 300 字节/拍做保守估算。
+
+**口径**（`proc_leaders`）：
+
+| 列 | 含义 | 分母 |
+|---|---|---|
+| 平均 | 窗口内该进程 CPU/内存/IO 的均值 | **窗口内全部样本数**，没出现记 0 |
+| 峰值 | 最高的一拍 + 发生时刻 | — |
+| 活跃占比 | 有多少比例的拍超过阈值（CPU 5%、IO 1 MB/s） | 窗口内全部样本数 |
+| 增长 | 窗口内首尾内存之差（只对内存有意义） | — |
+
+平均的分母取全部样本而不是「出现次数」，是为了让「偶尔飙一下」和「一直占着」
+可比；中位数在这里没有意义（桌面进程 CPU 是大量 0 组成的稀疏分布，中位数恒为 0），
+换成活跃占比回答「它是不是一直在动」，内存再补一列增长回答「是不是在漏」。
+
+合并**按进程名**、且扫**全量进程表**（不是只扫榜上的 20 个）：Chrome 一个应用
+开二十个进程，不合并的话榜上全是它的子进程。GPU 与网络在 UI 里可见但禁用，
+原因同 ADR-002——拿不到逐进程数据就不假装有。
+
+**报告图**在前端画：SVG 字符串 → `data:` URL → `<img>` → `<canvas>` → `toBlob`。
+必须用 `data:` 而不是 `blob:`（CSP 是 `img-src 'self' data:`），而且 SVG 在
+`<img>` 里是独立文档，拿不到页面上的 CSS 变量，颜色要先 `getComputedStyle`
+解析成字面量再拼进去。落盘走 `save_report`，复制走 `copy_image`——
+WKWebView 的 `navigator.clipboard.write` 时灵时不灵且要求在用户手势的同步栈里，
+而生成图片是异步的，所以 macOS 上绕道 `osascript` 读文件进剪贴板。
+
+> 弹窗不要加 CSS 入场动画：WKWebView 上给带 `backdrop-filter` 的元素叠 opacity
+> 关键帧，合成层不跟时间轴走，`opacity` 会一直停在 0，弹窗整个看不见，
+> 且 Chrome 不复现。
 
 ---
 

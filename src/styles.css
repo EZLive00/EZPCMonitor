@@ -31,6 +31,8 @@
   --popover-bg: rgba(22, 26, 36, 0.96);
   --widget-bg: linear-gradient(158deg, rgba(24, 29, 42, 0.74) 0%, rgba(10, 12, 18, 0.82) 100%);
   --scrim: rgba(4, 6, 10, 0.62);
+  /* 报告图的底色：PNG 不能带 CSS，取一个和 --page 观感一致的纯色 */
+  --report-bg: #0b0d12;
   --shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
   --shadow-sm: 0 12px 30px rgba(0, 0, 0, 0.55);
 
@@ -85,6 +87,7 @@
   /* 浅色下悬浮窗要更实一点：白底叠白字，透明度高了字就飘 */
   --widget-bg: linear-gradient(158deg, rgba(255, 255, 255, 0.82) 0%, rgba(242, 245, 251, 0.91) 100%);
   --scrim: rgba(16, 24, 40, 0.30);
+  --report-bg: #f2f5fa;
   --shadow: 0 30px 80px rgba(16, 24, 40, 0.18);
   --shadow-sm: 0 12px 30px rgba(16, 24, 40, 0.14);
 
@@ -140,6 +143,7 @@
     /* 浅色下悬浮窗要更实一点：白底叠白字，透明度高了字就飘 */
     --widget-bg: linear-gradient(158deg, rgba(255, 255, 255, 0.82) 0%, rgba(242, 245, 251, 0.91) 100%);
     --scrim: rgba(16, 24, 40, 0.30);
+  --report-bg: #f2f5fa;
     --shadow: 0 30px 80px rgba(16, 24, 40, 0.18);
     --shadow-sm: 0 12px 30px rgba(16, 24, 40, 0.14);
 
@@ -841,6 +845,12 @@ button {
 
 /* ---------- 磁盘详情弹窗（二级页面） ---------- */
 
+/* 弹窗不做入场动画，别再加回来。
+   Tauri 在 macOS 上是 WKWebView：给带 `backdrop-filter` 的遮罩（或它的子元素）
+   加一个改 opacity 的关键帧动画，合成层不跟动画时间轴走，opacity 会一直停在 0，
+   整个弹窗看不见——而且 Chrome 里完全不复现，本地浏览器调不出来。
+   代价只是少 140ms 淡入，不值得冒这个险。 */
+
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -851,16 +861,6 @@ button {
   padding: 28px;
   background: var(--scrim);
   backdrop-filter: blur(6px);
-  animation: modal-in 0.14s ease;
-}
-
-@keyframes modal-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
 }
 
 .modal {
@@ -1753,6 +1753,149 @@ button {
   margin: 6px 0 0;
 }
 
+/* ---------- 程序榜（历史弹窗的第二视图） ---------- */
+
+.pl-dims {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+/* GPU / 流量：系统没有按进程的数据，标出来但点不动 */
+.pl-dims .chip:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+.pl-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.pl-table th {
+  padding: 5px 0;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--dim);
+  text-align: left;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--line);
+}
+
+.pl-table th.pl-sort {
+  text-align: right;
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.14s ease;
+}
+
+.pl-table th.pl-sort:hover {
+  color: var(--text);
+}
+
+.pl-table th.pl-sort.on {
+  color: var(--accent);
+}
+
+/* 箭头始终占位，不然切换排序列时整行会左右抖 */
+.pl-arrow {
+  display: inline-block;
+  width: 9px;
+  margin-left: 3px;
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.pl-table td {
+  padding: 6px 0;
+  color: var(--muted);
+  border-bottom: 1px solid rgba(var(--ovl), 0.04);
+}
+
+.pl-table tr:last-child td {
+  border-bottom: none;
+}
+
+.pl-table td.name {
+  color: var(--text);
+  font-weight: 550;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pl-rank {
+  width: 26px;
+  font-size: 9.5px;
+  color: var(--dim);
+}
+
+.pl-num {
+  width: 142px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* 数字给一个固定宽度，条形图才能每行从同一个位置开始——
+   否则「0.6%」比「31.7%」窄一个字，条就跟着往右挪一格 */
+.pl-num > span:last-child {
+  display: inline-block;
+  min-width: 56px;
+  text-align: right;
+}
+
+/* 实心是均值、浅色接在后面是峰值：一眼看出「常态」和「最坏」差多远 */
+.pl-bar {
+  position: relative;
+  display: inline-block;
+  vertical-align: middle;
+  width: 76px;
+  height: 5px;
+  margin-right: 8px;
+  border-radius: 3px;
+  background: rgba(var(--ovl), 0.08);
+  overflow: hidden;
+}
+
+.pl-bar i {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--accent);
+}
+
+.pl-bar b {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  background: rgba(var(--accent-rgb), 0.42);
+}
+
+/* 「已保存 / 已复制」一闪即隐 */
+.hist-flash {
+  font-size: 9.5px;
+  font-weight: 600;
+  color: var(--ok);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.hist-flash.on {
+  opacity: 1;
+}
+
+/* .mini 本来是行内按钮，靠 margin 跟前面的文字拉开；放进 flex 工具栏就是多余的 */
+.modal-actions .mini {
+  margin-left: 0;
+}
+
 /* ---------- 进程排序 ---------- */
 
 .sort-tabs {
@@ -1783,3 +1926,4 @@ button {
   color: var(--accent);
   background: rgba(var(--accent-rgb), 0.14);
 }
+

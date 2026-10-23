@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import type { HistPoint, HistoryStats } from "./types";
+import type { HistPoint, HistoryStats, ProcLeaders } from "./types";
 
 /** 历史文件现状（条数 / 占用 / 每条大小）。设置弹窗和历史弹窗都要用。 */
 export function useHistoryStats() {
@@ -52,6 +52,17 @@ export function useHistory(rangeSecs: number | null) {
   }, [rangeSecs]);
 
   return { rows, loading };
+}
+
+/**
+ * 高占用程序榜。
+ *
+ * 一次把 CPU / 内存 / 磁盘三个维度全取回来：切维度、改排序都在本地算，
+ * 不用再读一遍文件——真正贵的是一次目录扫描，不是排序。
+ */
+export function fetchLeaders(rangeSecs: number | null): Promise<ProcLeaders> {
+  const from = rangeSecs ? Math.floor(Date.now() / 1000) - rangeSecs : null;
+  return invoke<ProcLeaders>("proc_leaders", { from });
 }
 
 export interface Bucket {
