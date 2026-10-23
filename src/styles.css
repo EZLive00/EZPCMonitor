@@ -719,6 +719,22 @@ button {
   font-variant-numeric: tabular-nums;
 }
 
+/* 磁盘列表只在纵向滚。
+   横向滚动条只留给进程表——磁盘这一栏的内容是「名字 + 挂载点 + 实时读写」，
+   挤的时候应该省略号截断，而不是让人左右拖。
+
+   负外边距是为了让每行的 hover 高亮能贴到卡片边（行自己也有 margin:0 -6px）。
+   这份「出血」必须由容器补回来：容器同样 -6px 外扩、+6px 内缩，
+   行的外框才正好落在容器的 padding box 里，不会多出 12px 撑出横向滚动条。 */
+.disk-list {
+  margin: 4px -6px 0;
+  padding: 0 6px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  flex: 1;
+  min-height: 0;
+}
+
 .disk-row {
   padding: 7px 0;
   border-bottom: 1px solid rgba(var(--ovl), 0.05);
@@ -735,16 +751,27 @@ button {
   font-size: 11.5px;
   margin-bottom: 5px;
   font-variant-numeric: tabular-nums;
+  min-width: 0;
 }
 
+/* 名字和挂载点都能缩：min-width:0 才能让 flex 子项缩到内容宽度以下，
+   否则它们会按内容撑开，把这一行顶出横向滚动条。
+   挂载点让位更快（flex-shrink 2），名字是主要信息，留得久一点。 */
 .disk-name {
   font-weight: 600;
   font-size: 12px;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .disk-mount {
   color: var(--dim);
   font-size: 10px;
+  flex: 0 2 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -755,12 +782,14 @@ button {
   color: var(--muted);
   font-size: 10px;
   white-space: nowrap;
+  flex: none;
 }
 
 .meter {
   border-radius: 99px;
   overflow: hidden;
   width: 100%;
+  min-width: 0;
 }
 
 .meter-fill {

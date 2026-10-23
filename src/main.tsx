@@ -254,7 +254,7 @@ export default function Dashboard() {
               {i.t("dash.write", { v: rate(snap.diskTotalWriteBps) })}
             </span>
           </div>
-          <div style={{ overflow: "auto", marginTop: 4, flex: 1, minHeight: 0 }}>
+          <div className="disk-list">
             {snap.disks.map((d) => {
               const p = d.total > 0 ? (d.used / d.total) * 100 : 0;
               // 健康数据按挂载点配对；对不上时（例如 APFS 合并了挂载点）退回同序号
@@ -288,6 +288,7 @@ export default function Dashboard() {
                         fontSize: 10,
                         color: "var(--muted)",
                         whiteSpace: "nowrap",
+                        flex: "none",
                         width: 116,
                         textAlign: "right",
                       }}
