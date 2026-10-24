@@ -149,6 +149,12 @@ export const strings: Dict = {
   "rep.generated": "{v} に生成",
   "rep.samples": "{n} サンプル",
   "rep.noProc": "この区間で記録基準を超えたプログラムはありません",
+  "rep.save": "保存",
+  "rep.cancel": "キャンセル",
+  "rep.hint": "「ダウンロード」に保存、ファイル名は日時から生成",
+  "rep.savedTo": "「ダウンロード」に保存しました",
+  "rep.reveal": "Finder で表示",
+  "rep.failed": "保存に失敗しました",
 
   "dd.solid": "SSD",
   "dd.hdd": "HDD",

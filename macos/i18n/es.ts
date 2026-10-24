@@ -153,6 +153,12 @@ export const strings: Dict = {
   "rep.generated": "Generado el {v}",
   "rep.samples": "{n} muestras",
   "rep.noProc": "Ningún programa superó el umbral de registro",
+  "rep.save": "Guardar",
+  "rep.cancel": "Cancelar",
+  "rep.hint": "Se guarda en «Descargas», con nombre por hora",
+  "rep.savedTo": "Guardado en «Descargas»",
+  "rep.reveal": "Mostrar en Finder",
+  "rep.failed": "Error al guardar",
 
   "dd.solid": "SSD",
   "dd.hdd": "HDD",

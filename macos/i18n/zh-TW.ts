@@ -149,6 +149,12 @@ export const strings: Dict = {
   "rep.generated": "產生於 {v}",
   "rep.samples": "{n} 個取樣點",
   "rep.noProc": "這段時間沒有程式超過記錄門檻",
+  "rep.save": "儲存",
+  "rep.cancel": "取消",
+  "rep.hint": "儲存到「下載」，檔名按時間生成",
+  "rep.savedTo": "已儲存到「下載」",
+  "rep.reveal": "在 Finder 中顯示",
+  "rep.failed": "儲存失敗",
 
   "dd.solid": "固態",
   "dd.hdd": "機械",

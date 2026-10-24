@@ -161,6 +161,12 @@ export const strings = {
   "rep.generated": "生成于 {v}",
   "rep.samples": "{n} 个采样点",
   "rep.noProc": "这段时间没有程序超过记录门槛",
+  "rep.save": "保存",
+  "rep.cancel": "取消",
+  "rep.hint": "保存到「下载」，文件名按时间生成",
+  "rep.savedTo": "已保存到「下载」",
+  "rep.reveal": "在访达中显示",
+  "rep.failed": "保存失败",
 
   // ---------------------------------------------------------------- 磁盘详情
   "dd.solid": "固态",

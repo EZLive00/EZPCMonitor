@@ -151,6 +151,12 @@ export const strings: Dict = {
   "rep.generated": "Generated {v}",
   "rep.samples": "{n} samples",
   "rep.noProc": "No program went above the recording threshold",
+  "rep.save": "Save",
+  "rep.cancel": "Cancel",
+  "rep.hint": "Saves to Downloads, named by time",
+  "rep.savedTo": "Saved to Downloads",
+  "rep.reveal": "Show in Finder",
+  "rep.failed": "Couldn't save",
 
   "dd.solid": "SSD",
   "dd.hdd": "HDD",

@@ -149,6 +149,12 @@ export const strings: Dict = {
   "rep.generated": "{v} 생성",
   "rep.samples": "샘플 {n}개",
   "rep.noProc": "이 구간에서 기록 기준을 넘은 프로그램이 없습니다",
+  "rep.save": "저장",
+  "rep.cancel": "취소",
+  "rep.hint": "'다운로드'에 저장되며 파일 이름은 시간으로 생성됩니다",
+  "rep.savedTo": "'다운로드'에 저장됨",
+  "rep.reveal": "Finder에서 보기",
+  "rep.failed": "저장 실패",
 
   "dd.solid": "SSD",
   "dd.hdd": "HDD",

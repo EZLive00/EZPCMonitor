@@ -406,6 +406,15 @@ enum ReportMaker {
         return renderer.nsImage
     }
 
+    /// 预览用的视图：和导出走的是**同一个** `ReportPage`，所以看到的就是存下来的。
+    ///
+    /// 预览不预先渲成位图，是为了内存——2160×2734 的 RGBA 是 23MB，窗口开着的
+    /// 每一秒都占着。摆一份活的视图进去，只有真正点「保存」时才渲一次、渲完就放。
+    @MainActor
+    static func page(_ input: ReportInput) -> some View {
+        ReportPage(input: input, theme: .current(), i18n: L10n.shared)
+    }
+
     static func png(_ image: NSImage) -> Data? {
         guard let tiff = image.tiffRepresentation,
               let rep = NSBitmapImageRep(data: tiff)
@@ -449,6 +458,12 @@ enum ReportMaker {
     static func copy(_ image: NSImage) -> Bool {
         let pb = NSPasteboard.general
         pb.clearContents()
-        return pb.writeObjects([image])
+        // `writeObjects` 只放 TIFF（AppKit 的默认格式）。浏览器里的富文本框、不少
+        // 聊天窗口只认 PNG，所以两种都塞进去，收件方挑自己能读的那个。
+        var ok = pb.writeObjects([image])
+        if let png = png(image) {
+            ok = pb.setData(png, forType: .png) || ok
+        }
+        return ok
     }
 }

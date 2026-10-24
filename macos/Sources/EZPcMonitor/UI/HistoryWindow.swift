@@ -30,6 +30,8 @@ final class HistoryWindow: NSWindow {
 final class HistoryController: NSObject, NSWindowDelegate {
     private let model: AppModel
     private var window: HistoryWindow?
+    /// 预览窗口跟着历史窗口活：历史关了，预览也没了意义。
+    private let preview = ReportPreviewController()
 
     var onOpenSettings: () -> Void = {}
 
@@ -42,7 +44,10 @@ final class HistoryController: NSObject, NSWindowDelegate {
         if window == nil {
             let view = HistoryView(
                 model: model,
-                onOpenSettings: { [weak self] in self?.onOpenSettings() }
+                onOpenSettings: { [weak self] in self?.onOpenSettings() },
+                onPreviewReport: { [weak self] input, name in
+                    self?.preview.show(input: input, name: name)
+                }
             )
             .environmentObject(L10n.shared)
             let w = HistoryWindow(content: view)
@@ -73,6 +78,8 @@ struct HistoryView: View {
     @EnvironmentObject private var i18n: L10n
 
     var onOpenSettings: () -> Void = {}
+    /// 报告渲好之后往哪儿送。默认空实现，由 `HistoryController` 接到预览窗口上。
+    var onPreviewReport: (ReportInput, String) -> Void = { _, _ in }
 
     @State private var rows: [HistoryPoint] = []
     @State private var leaders: Leaders?
@@ -85,9 +92,14 @@ struct HistoryView: View {
 
     /// 默认停在「保留时长以内最大的那一档」，而不是「全部」：
     /// 保留 30 天的人一进来就画三十万个点，图糊成一片，还得自己往回缩。
-    init(model: AppModel, onOpenSettings: @escaping () -> Void = {}) {
+    init(
+        model: AppModel,
+        onOpenSettings: @escaping () -> Void = {},
+        onPreviewReport: @escaping (ReportInput, String) -> Void = { _, _ in }
+    ) {
         self.model = model
         self.onOpenSettings = onOpenSettings
+        self.onPreviewReport = onPreviewReport
         let opts = SeriesLogic.ranges.filter { $0 <= model.settings.historyRetentionSecs }
         _range = State(initialValue: opts.last)
     }
@@ -136,9 +148,9 @@ struct HistoryView: View {
         .background(Color(nsColor: .windowBackgroundColor))
         .task(id: range) {
             await load()
-            // 开发钩子：`--report` 一进来就出一张图存到「下载」，
+            // 开发钩子：`--report` 一进来就出图并开预览（同时把原图存到「下载」），
             // 用来回归报告版面和 ImageRenderer 的导出，省得每次都手点。
-            if CommandLine.arguments.contains("--report") { await makeReport(copy: false) }
+            if CommandLine.arguments.contains("--report") { await makeReport() }
         }
         .task { stats = await fetchStats() }
     }
@@ -157,11 +169,10 @@ struct HistoryView: View {
             MiniButton(
                 title: busy == "report" ? i18n.t("hist.reporting") : i18n.t("hist.report"),
                 enabled: busy == nil && !rows.isEmpty
-            ) { Task { await makeReport(copy: false) } }
+            ) { Task { await makeReport() } }
 
-            MiniButton(title: i18n.t("hist.copy"), enabled: busy == nil && !rows.isEmpty) {
-                Task { await makeReport(copy: true) }
-            }
+            // 复制挪到预览窗口里去了：复制的内容和保存的内容是同一张图，
+            // 两个按钮并排摆着，等于让人先选「怎么拿走」再选「要不要」。
 
             // 自绘的 ✕ 去掉了：窗口左上角已经有红绿灯，两个关闭按钮并排只会让人犹豫。
             // 键盘党按 Esc 一样能关（HistoryWindow.cancelOperation）。
@@ -312,14 +323,18 @@ struct HistoryView: View {
         return await Task.detached(priority: .utility) { engine.stats() }.value
     }
 
-    // MARK: 出图
+    // MARK: 报告
 
-    /// 两个按钮走同一条路：先落盘，再决定要不要放进剪贴板。
-    /// 复制也得有文件——用户很可能既想粘到聊天里，也想留一份。
+    /// 只负责把数据攒成 `ReportInput`，落盘和复制都交给预览窗口——用户点了
+    /// 「报告」不等于同意往「下载」里写文件，先看一眼再决定。
+    ///
+    /// 这里**不渲图**：预览窗口摆的是活的 `ReportPage` 视图，位图只在点「保存」
+    /// 或「复制」时才生成。见 `ReportMaker.page`。
     @MainActor
-    private func makeReport(copy: Bool) async {
+    private func makeReport() async {
         guard busy == nil, !rows.isEmpty else { return }
-        busy = copy ? "copy" : "report"
+        busy = "report"
+        defer { busy = nil }
 
         // 历史窗口可以比主面板先打开，那时候模型里还没有第一拍快照。
         // 不补这一下，报告抬头就会写成「Mac ·」——中间那个点后面什么都没有。
@@ -338,24 +353,22 @@ struct HistoryView: View {
             withDate: withDate
         )
 
-        guard let image = ReportMaker.image(input),
-              let png = ReportMaker.png(image),
-              let url = ReportMaker.save(png, name: ReportMaker.name(input.now))
-        else {
-            busy = nil
-            show(i18n.t("hist.copyFail"))
-            return
-        }
+        let name = ReportMaker.name(input.now)
+        onPreviewReport(input, name)
 
-        if copy {
-            _ = ReportMaker.copy(image)
-            show(i18n.t("hist.copied"))
-        } else {
-            show(i18n.t("hist.reportSaved"))
-            // 顺手在访达里选中，省得用户去翻下载目录
-            NSWorkspace.shared.activateFileViewerSelecting([url])
+        // 开发钩子：`--report` 直接开预览，`--report-save` 再加一步存到「下载」。
+        // 拆成两个是因为截图/版面回归要的是那张原图，而量内存时不能顺手写盘——
+        // 渲一次 2160×2734 的位图会把 footprint 抬高二十多兆，读数就废了。
+        if CommandLine.arguments.contains("--report") {
+            let save = CommandLine.arguments.contains("--report-save")
+            if save,
+               let image = ReportMaker.image(input),
+               let png = ReportMaker.png(image),
+               let url = ReportMaker.save(png, name: name) {
+                show(i18n.t("hist.reportSaved"))
+                NSLog("report saved: %@", url.path)
+            }
         }
-        busy = nil
     }
 
     /// 报告抬头要写用户在「系统设置」里看到的那台机器名，而不是 DNS 主机名——
