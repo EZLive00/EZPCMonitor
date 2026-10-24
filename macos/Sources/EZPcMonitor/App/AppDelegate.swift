@@ -69,6 +69,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             dashboard = DashboardController(model: model)
             dashboard?.onOpenHistory = { [weak self] in self?.openHistory() }
             dashboard?.onOpenSettings = { [weak self] in self?.openSettings() }
+            // 互斥：面板一开收起悬浮窗，关掉再放回去
+            dashboard?.onVisibilityChanged = { [weak self] open in
+                self?.widget.suppressForDashboard(open)
+            }
         }
         dashboard?.show()
     }

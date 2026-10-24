@@ -33,6 +33,9 @@ final class DashboardController: NSObject, NSWindowDelegate {
     var onOpenHistory: () -> Void = {}
     var onOpenSettings: () -> Void = {}
 
+    /// 面板开/关时通知外面，用来收起和还原悬浮窗。
+    var onVisibilityChanged: (Bool) -> Void = { _ in }
+
     init(model: AppModel) {
         self.model = model
         super.init()
@@ -54,6 +57,7 @@ final class DashboardController: NSObject, NSWindowDelegate {
         }
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+        onVisibilityChanged(true)
         // 主面板开着才需要进程列表；关掉就停采，省一次全表遍历
         model.engine.setWantProcs(true)
         model.refreshNow()
@@ -68,6 +72,7 @@ final class DashboardController: NSObject, NSWindowDelegate {
         model.engine.setWantProcs(false)
         model.stopHealthPolling()
         window = nil
+        onVisibilityChanged(false)
     }
 }
 

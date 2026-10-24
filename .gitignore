@@ -1,12 +1,10 @@
-node_modules/
-dist/
-src-tauri/target/
-src-tauri/gen/
 .DS_Store
 *.log
 
-# 原生分支：Rust core 与 Swift 的构建产物
+# Rust 采集内核的构建产物
 core/target/
+
+# Swift 外壳的构建产物（macos/build.sh 生成 .app）
 macos/.build/
 macos/build/
 

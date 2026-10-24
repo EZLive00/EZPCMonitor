@@ -4,6 +4,12 @@
 >
 > 版本 v0.1 · 2026-10
 
+> **这份文档写的是 v0.1（Tauri 2 + React + WebView）那一版。**
+> v0.2 把外壳换成了 AppKit / SwiftUI（`macos/`），采集内核原样留在 `core/`，
+> 中间隔一层 C ABI。所以下面提到 `src/`、`src-tauri/`、`vite.config.ts` 的地方
+> 都属于历史——那些目录已经不在这个分支上了（`master` / `mac_original` 里还在）。
+> 原生版的结构与实测数据看 [README](../README.md)；每个"为什么这么写"都记在对应源文件的注释里。
+
 ![悬浮窗](screenshots/widget-card.png)
 
 ![主面板](screenshots/dashboard.png)

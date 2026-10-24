@@ -1,10 +1,14 @@
 /**
- * 把 `src/i18n/*.ts` 导出成 `macos/Resources/strings.json`。
+ * 把 `macos/i18n/*.ts` 导出成 `macos/Resources/strings.json`。
  *
- * 原生分支的界面是 Swift 写的，但文案不该重打一遍——那 181 个键、7 种语言
+ * 原生分支的界面是 Swift 写的，但文案不该重打一遍——那 185 个键、7 种语言
  * 是 WebView 版攒下来的，重抄一遍必然走样。这里用 Node 的类型剥离直接 import
  * 那几个 TS 文件（它们只是 `export const strings = {...}`，没有运行时依赖），
- * 拼成一张 `{ "zh-CN": {...}, "en": {...} }` 的表，Swift 侧启动时读一次。
+ * 拼成一张 `{ "zh-CN": { strings, plurals }, ... }` 的表，Swift 侧启动时读一次。
+ *
+ * 字典本身从 `src/i18n/` 搬到了 `macos/i18n/`：WebView 那半边已经删掉，
+ * 但这七份译文是唯一资产，不能跟着一起走。搬过来之后它们就是原生版的源码，
+ * 改文案改 `macos/i18n/zh-CN.ts` 即可。
  *
  * 跑法：node macos/tools/extract-strings.mjs
  * build.sh 会顺手调一次，所以改完 TS 字典不用手动同步。
@@ -19,7 +23,7 @@ const LANGS = ["zh-CN", "zh-TW", "en", "ja", "ko", "fr", "es"];
 
 const out = {};
 for (const lang of LANGS) {
-  const mod = await import(join(root, "src", "i18n", `${lang}.ts`));
+  const mod = await import(join(root, "macos", "i18n", `${lang}.ts`));
   const strings = mod.strings;
   const plurals = mod.plurals ?? {};
   const bad = Object.entries(strings).filter(([, v]) => typeof v !== "string");
