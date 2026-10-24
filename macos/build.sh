@@ -92,7 +92,7 @@ printf 'APPL????' > "$APP/Contents/PkgInfo"
 codesign --force --sign - --timestamp=none "$APP" >/dev/null 2>&1 || \
   echo "    （签名失败，不影响本机运行）"
 
-echo "完成：$APP（$(du -sh "$APP" | cut -f1)）"
+echo "完成：${APP} ($(du -sh "${APP}" | cut -f1))"
 
 if [ "$OPEN_AFTER" = "1" ]; then
   pkill -f "EZPcMonitor.app/Contents/MacOS/EZPcMonitor" 2>/dev/null || true

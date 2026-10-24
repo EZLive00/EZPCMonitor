@@ -21,27 +21,35 @@ const out = {};
 for (const lang of LANGS) {
   const mod = await import(join(root, "src", "i18n", `${lang}.ts`));
   const strings = mod.strings;
+  const plurals = mod.plurals ?? {};
   const bad = Object.entries(strings).filter(([, v]) => typeof v !== "string");
   if (bad.length) {
     throw new Error(`${lang}: ${bad.length} 个值不是字符串，导出脚本要跟着改`);
   }
-  out[lang] = strings;
+  // 单复数表跟文案表分开存：前者值是 [单数, 复数] 二元组，
+  // Swift 侧 `tn(key, n)` 按 n === 1 取第 0 / 1 项。
+  out[lang] = { strings, plurals };
 }
 
 // 七份的键集合必须完全一致，否则界面上会出现「英文有、日文没有」的洞
-const base = Object.keys(out["zh-CN"]).sort();
+const base = Object.keys(out["zh-CN"].strings).sort();
 for (const lang of LANGS.slice(1)) {
-  const keys = Object.keys(out[lang]).sort();
-  const missing = base.filter((k) => !(k in out[lang]));
-  const extra = keys.filter((k) => !(k in out["zh-CN"]));
+  const keys = Object.keys(out[lang].strings).sort();
+  const missing = base.filter((k) => !(k in out[lang].strings));
+  const extra = keys.filter((k) => !(k in out["zh-CN"].strings));
   if (missing.length || extra.length) {
     throw new Error(
       `${lang} 与 zh-CN 的键对不上：缺 ${missing.slice(0, 5).join(",")}，多 ${extra.slice(0, 5).join(",")}`,
     );
+  }
+  const baseP = Object.keys(out["zh-CN"].plurals).sort();
+  const missP = baseP.filter((k) => !(k in out[lang].plurals));
+  if (missP.length) {
+    throw new Error(`${lang} 缺单复数键：${missP.slice(0, 5).join(",")}`);
   }
 }
 
 const target = join(root, "macos", "Resources", "strings.json");
 await mkdir(dirname(target), { recursive: true });
 await writeFile(target, JSON.stringify(out, null, 2) + "\n", "utf8");
-console.log(`wrote ${target}: ${LANGS.length} 种语言 × ${base.length} 键`);
+console.log(`wrote ${target}: ${LANGS.length} 种语言 × ${base.length} 键 + ${Object.keys(out["zh-CN"].plurals).length} 个单复数键`);

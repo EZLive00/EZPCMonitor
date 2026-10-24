@@ -183,6 +183,103 @@ struct Settings: Decodable, Equatable {
     }
 }
 
+// MARK: - 高占用程序榜
+
+/// 某个维度（CPU / 磁盘）在一个时间窗里的统计。
+struct DimStat: Decodable {
+    let mean: Double
+    let peak: Double
+    /// 峰值出现的 unix 秒
+    let peakTs: UInt64
+    /// 活跃采样占全部采样的百分比（0~100）
+    let active: Double
+}
+
+/// 内存是「存量」不是「流量」，所以除了均值和峰值还要给首尾值——
+/// 首尾之差就是这个窗口里涨了多少，能暴露慢慢泄漏的程序。
+struct MemStat: Decodable {
+    let meanMb: Double
+    let peakMb: Double
+    let peakTs: UInt64
+    let firstMb: Double
+    let lastMb: Double
+}
+
+struct Leader: Decodable, Identifiable {
+    let name: String
+    /// 它出现过几次采样（缺席 = 低于门槛）
+    let samples: UInt32
+    let cpu: DimStat
+    let mem: MemStat
+    let io: DimStat
+
+    var id: String { name }
+}
+
+struct Leaders: Decodable {
+    /// 窗口内的总采样次数（含空拍），所有均值和占比都以它为分母
+    let total: UInt64
+    let sampleSecs: UInt64
+    let rows: [Leader]
+
+    static let empty = Leaders(total: 0, sampleSecs: 30, rows: [])
+}
+
+// MARK: - 硬盘健康
+
+struct SmartAttr: Decodable, Identifiable {
+    let name: String
+    let value: String
+    let extra: String
+    /// 需要留意（低于阈值 / 关键计数非零）
+    let critical: Bool
+
+    var id: String { name + value + extra }
+}
+
+struct DiskHealth: Decodable, Identifiable {
+    /// 对应的挂载点，靠它和 Disk 配对
+    let mount: String
+    let device: String
+    let model: String
+    let serial: String
+    let firmware: String
+    /// good | warning | bad | unknown
+    let status: String
+    let smartStatus: String
+    let lifeLeft: Double?
+    let lifeUsed: Double?
+    let spare: Double?
+    let temperature: Double?
+    let powerOnHours: UInt64?
+    let powerCycles: UInt64?
+    let writtenBytes: UInt64?
+    let readBytes: UInt64?
+    let mediaErrors: UInt64?
+    let unsafeShutdowns: UInt64?
+    let solidState: Bool?
+    let bus: String
+    let attrs: [SmartAttr]
+    /// 数据来源，界面上要如实展示（"diskutil" / "smartctl 7.3"）
+    let source: String
+    let note: String?
+
+    var id: String { mount }
+}
+
+// MARK: - 测速
+
+struct BenchResult: Decodable {
+    let sizeMb: UInt64
+    let writeMbps: Double
+    let readMbps: Double
+    let writeMs: UInt64
+    let readMs: UInt64
+    /// 实际写入的临时文件路径，用户有权知道我们把数据写到了哪
+    let path: String
+    let note: String?
+}
+
 // MARK: - 悬浮窗形态
 
 enum WidgetMode: String, CaseIterable {
