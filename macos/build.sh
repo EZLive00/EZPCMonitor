@@ -79,12 +79,14 @@ swiftc "${OPT[@]}" \
 echo "==> 4/4 组装 .app"
 cp "$MAC/Resources/Info.plist" "$APP/Contents/Info.plist"
 cp "$MAC/Resources/strings.json" "$APP/Contents/Resources/strings.json"
-cp "$ROOT/src-tauri/icons/icon.icns" "$APP/Contents/Resources/AppIcon.icns"
-# 硬盘 SMART 要它；没有就回落系统装的那份（brew install smartmontools）
-if [ -f "$ROOT/src-tauri/resources/bin/smartctl" ]; then
-  cp "$ROOT/src-tauri/resources/bin/smartctl" "$APP/Contents/Resources/bin/smartctl"
+cp "$MAC/Resources/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
+# 硬盘 SMART 要它；没有就回落系统装的那份（brew install smartmontools）。
+# 从 macos/Resources 里拿，不再去 src-tauri 借——原生版的构建不该依赖
+# 已经废弃的 WebView 目录，否则那一半就永远删不掉。
+if [ -f "$MAC/Resources/bin/smartctl" ]; then
+  cp "$MAC/Resources/bin/smartctl" "$APP/Contents/Resources/bin/smartctl"
   chmod +x "$APP/Contents/Resources/bin/smartctl"
-  cp "$ROOT/src-tauri/resources/bin/COPYING" "$APP/Contents/Resources/bin/COPYING" 2>/dev/null || true
+  cp "$MAC/Resources/bin/COPYING" "$APP/Contents/Resources/bin/COPYING" 2>/dev/null || true
 fi
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 
