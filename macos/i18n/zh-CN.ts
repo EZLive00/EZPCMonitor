@@ -97,7 +97,7 @@ export const strings = {
   "set.clear": "清空",
   "set.estimate": "按当前设置，保留 {ret} 约占 {size}（每 {n} 秒一条）。",
   "set.group.about": "关于",
-  "set.aboutHint": "Tauri 2 · Rust · 数据全部在本机采集",
+  "set.aboutHint": "SwiftUI · Rust · 数据全部在本机采集",
   "set.foot": "改完立即生效，不需要重启。历史文件在应用数据目录下的 history.jsonl 与 procs/ 目录，随时可以清空。",
 
   // ---------------------------------------------------------------- 历史

@@ -87,7 +87,7 @@ export const strings: Dict = {
   "set.clear": "クリア",
   "set.estimate": "現在の設定では、{ret} 分の履歴で約 {size}（{n} 秒ごとに 1 件）。",
   "set.group.about": "このアプリについて",
-  "set.aboutHint": "Tauri 2 · Rust · データはすべて端末内で収集",
+  "set.aboutHint": "SwiftUI · Rust · データはすべて端末内で収集",
   "set.foot": "変更はすぐに反映され、再起動は不要です。履歴ファイルはアプリのデータフォルダーの history.jsonl と procs/ フォルダーにあり、いつでも消去できます。",
 
   "hist.title": "履歴",

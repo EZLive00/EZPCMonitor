@@ -87,7 +87,7 @@ export const strings: Dict = {
   "set.clear": "清空",
   "set.estimate": "依目前設定，保留 {ret} 約佔 {size}（每 {n} 秒一筆）。",
   "set.group.about": "關於",
-  "set.aboutHint": "Tauri 2 · Rust · 資料全部在本機採集",
+  "set.aboutHint": "SwiftUI · Rust · 資料全部在本機採集",
   "set.foot": "改完立即生效，不需要重新啟動。歷史檔案在應用程式資料目錄下的 history.jsonl 與 procs/ 目錄，隨時可以清空。",
 
   "hist.title": "歷史記錄",

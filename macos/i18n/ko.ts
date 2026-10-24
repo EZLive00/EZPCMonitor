@@ -87,7 +87,7 @@ export const strings: Dict = {
   "set.clear": "비우기",
   "set.estimate": "현재 설정으로 {ret} 분량을 보관하면 약 {size}({n}초마다 한 줄)입니다.",
   "set.group.about": "정보",
-  "set.aboutHint": "Tauri 2 · Rust · 모든 데이터를 이 기기에서 수집",
+  "set.aboutHint": "SwiftUI · Rust · 모든 데이터를 이 기기에서 수집",
   "set.foot": "변경 사항은 즉시 적용되며 재시작이 필요 없습니다. 기록 파일은 앱 데이터 폴더의 history.jsonl과 procs/ 폴더이며 언제든 비울 수 있습니다.",
 
   "hist.title": "기록",

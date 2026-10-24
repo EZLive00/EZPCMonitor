@@ -1,6 +1,6 @@
 [package]
 name = "ezpcm-core"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 description = "EZPcMonitor 采集内核：不依赖任何 UI 框架，通过 C ABI 交给宿主"
 authors = ["wargon"]

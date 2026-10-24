@@ -11,12 +11,17 @@ final class SettingsWindow: NSWindow {
             backing: .buffered,
             defer: false
         )
-        titleVisibility = .hidden
         title = "Settings"
+        useUnifiedChrome()
         isReleasedWhenClosed = false
         contentView = NSHostingView(rootView: AnyView(content))
         center()
         setFrameAutosaveName("ezpcm.settings")
+    }
+
+    /// Esc 关窗。窗口里没有自绘的关闭按钮了，键盘总得留个出口。
+    override func cancelOperation(_ sender: Any?) {
+        performClose(nil)
     }
 }
 
@@ -110,20 +115,9 @@ struct SettingsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            SheetHeader(i18n.t("set.title"), subtitle: i18n.t("set.sub")) {
-                Button { NSApp.keyWindow?.performClose(nil) } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 22, height: 20)
-                        .background(
-                            RoundedRectangle(cornerRadius: 5, style: .continuous)
-                                .fill(Color.primary.opacity(0.07))
-                        )
-                }
-                .buttonStyle(.plain)
-                .help(i18n.t("common.closeEsc"))
-            }
+            // 不再画自绘的 ✕：窗口左上角已经有红绿灯了，两个关闭按钮并排只会让人犹豫。
+            // 键盘党按 Esc 一样能关（下面的 onExitCommand）。
+            SheetHeader(i18n.t("set.title"), subtitle: i18n.t("set.sub"))
 
             Hairline().padding(.top, 10)
 

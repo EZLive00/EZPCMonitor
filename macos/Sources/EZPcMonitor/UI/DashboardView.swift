@@ -11,11 +11,11 @@ final class DashboardWindow: NSWindow {
             backing: .buffered,
             defer: false
         )
-        // 标题栏透明、标题文字不画（大标题在内容里）。
-        // 注意别开 `titlebarAppearsTransparent`：它会把 `.fullSizeContentView`
-        // 塞进 styleMask，内容顶到窗口最上面，红绿灯被盖住——窗口就关不掉了。
-        titleVisibility = .hidden
+        // 标题栏透明、标题文字不画（大标题在内容里），内容延伸到标题栏底下。
+        // 具体做了哪三件事见 WindowChrome.swift——光设 titleVisibility 是没用的，
+        // 那条分隔线来自标题栏自己，不是标题文字。
         title = "EZPcMonitor"
+        useUnifiedChrome()
         minSize = NSSize(width: 880, height: 660)
         contentView = NSHostingView(rootView: AnyView(content))
         center()

@@ -88,7 +88,7 @@ export const strings: Dict = {
   "set.estimate":
     "Avec les réglages actuels, l'historique de {ret} occupe environ {size} (une ligne toutes les {n} s).",
   "set.group.about": "À propos",
-  "set.aboutHint": "Tauri 2 · Rust · tout est collecté localement",
+  "set.aboutHint": "SwiftUI · Rust · tout est collecté localement",
   "set.foot":
     "Les changements s'appliquent immédiatement, sans redémarrage. Le fichier d'historique se trouve dans le dossier de données de l'application (history.jsonl), les échantillons par programme dans procs/. Les deux peuvent être vidés à tout moment.",
 

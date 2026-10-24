@@ -578,3 +578,36 @@ SwiftPM）、用 UniFFI 之类的绑定生成器、或者手写一层 C ABI。
 - 报告图现在是"深色一张皮"，浅色主题下导出也是深色。用户拿到的是图，不是界面。
 - `extract-strings.mjs` 依赖 Node 的 `--experimental-strip-types`（Node 22+）。
   没有 Node 时构建会跳过这一步，沿用已有的 `strings.json`，不会失败。
+
+---
+
+## ADR-021 窗口不要标题栏：内容顶到最上面，只留红绿灯
+
+**日期**：2026-10-24 · **状态**：生效
+
+**背景**：三个窗口（主面板 / 历史 / 设置）原来都是标准 `.titled` 窗口，只是把标题文字
+藏了。结果是：标题栏一条材质 + 下面一条 1px 分隔线，看起来像 2010 年的窗口；而正文里
+已经有一个 19pt 的标题（主机名），两套标题并存。
+
+**决定**：三个窗口统一走 `NSWindow.useUnifiedChrome()`——`.fullSizeContentView` +
+`titlebarAppearsTransparent` + `titlebarSeparatorStyle = .none` + 允许背景拖动。
+同时删掉历史/设置里自绘的 ✕（红绿灯已经在那儿了），改用 Esc 关窗。
+
+**理由**：
+
+- 现在 macOS 上的新应用基本都是这个形态（系统设置、Music、Notes）。用户看到的那条线
+  不是标题文字，是**标题栏自己的分隔线**——只设 `titleVisibility = .hidden` 是去不掉的，
+  必须 `titlebarSeparatorStyle = .none`。
+- 正文让开红绿灯不需要手写 padding：`.fullSizeContentView` 会把标题栏高度写进
+  `contentView.safeAreaInsets.top`，SwiftUI 根视图默认遵守安全区。
+- 两个关闭按钮（红绿灯 + 自绘 ✕）并排会让人犹豫"哪个才是关"，删掉自绘的那个，
+  键盘党留给 Esc。
+
+**已知取舍**：
+
+- 窗口顶部 28pt 的标题栏区域不再能放控件（会被红绿灯和拖拽区吃掉）。
+- `isMovableByWindowBackground = true` 之后，按住卡片空白也能拖窗口——是特性，不是 bug，
+  但和"拖拽选择文字"的习惯略有冲突（本应用没有可选文字）。
+- 自绘 ✕ 删掉之后，只用鼠标的用户少了一个"就在右上角"的关闭入口，得移到左上角。
+  这是为了少一个按钮、少一次犹豫。
+
