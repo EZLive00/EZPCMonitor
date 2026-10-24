@@ -190,6 +190,10 @@ export const strings: Dict = {
   "w.throughHint": "마우스 통과(트레이에서 해제)",
   "w.compact": "컴팩트 모드로 전환",
   "w.hide": "위젯 숨기기",
+  "w.show": "위젯 표시",
+  "w.bar": "컴팩트 바",
+  "w.opacity": "불투명도",
+  "unit.sec": "초",
 };
 
 export const plurals: Plurals = {

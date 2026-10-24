@@ -190,6 +190,10 @@ export const strings: Dict = {
   "w.throughHint": "滑鼠穿透（可從托盤關閉）",
   "w.compact": "切換精簡模式",
   "w.hide": "隱藏懸浮窗",
+  "w.show": "顯示懸浮窗",
+  "w.bar": "精簡條",
+  "w.opacity": "不透明度",
+  "unit.sec": "秒",
 };
 
 export const plurals: Plurals = {

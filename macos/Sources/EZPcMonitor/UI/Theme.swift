@@ -1,0 +1,129 @@
+import AppKit
+import SwiftUI
+
+// MARK: - 颜色
+
+extension NSColor {
+    convenience init(hex: UInt32) {
+        self.init(
+            srgbRed: CGFloat((hex >> 16) & 0xff) / 255,
+            green: CGFloat((hex >> 8) & 0xff) / 255,
+            blue: CGFloat(hex & 0xff) / 255,
+            alpha: 1
+        )
+    }
+}
+
+/// 配色沿用 WebView 版那一套（`src/styles.css` 里的 `--c-*`）。
+///
+/// 换到原生不是重画一遍配色，而是把同一组语义色搬过来——用户在两个版本之间
+/// 来回看的时候，「青=CPU、紫=内存、绿=磁盘」这套映射不该变。
+///
+/// 浅色模式单独给一档：`#22d3ee` 这种高明度青在毛玻璃上好看，压到白底上会糊。
+/// 用 `NSColor(name:dynamicProvider:)` 让系统自己按外观挑，视图里不用传 colorScheme。
+enum Palette {
+    static func dyn(_ dark: UInt32, _ light: UInt32) -> Color {
+        Color(nsColor: NSColor(name: nil) { appearance in
+            let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            return NSColor(hex: isDark ? dark : light)
+        })
+    }
+
+    static let accent = dyn(0x22d3ee, 0x0891b2)
+    static let accent2 = dyn(0xa78bfa, 0x7c3aed)
+
+    static let cpu = dyn(0x22d3ee, 0x0891b2)
+    static let cpuDeep = dyn(0x0e7490, 0x155e75)
+    static let mem = dyn(0xa78bfa, 0x7c3aed)
+    static let memDeep = dyn(0x6d28d9, 0x5b21b6)
+    static let temp = dyn(0xfbbf24, 0xd97706)
+    static let rx = dyn(0x38bdf8, 0x0284c7)
+    static let tx = dyn(0xa78bfa, 0x7c3aed)
+    static let disk = dyn(0x34d399, 0x059669)
+    static let gpu = dyn(0xc084fc, 0x9333ea)
+
+    static let ok = dyn(0x34d399, 0x059669)
+    static let warn = dyn(0xfbbf24, 0xd97706)
+    static let danger = dyn(0xf87171, 0xdc2626)
+}
+
+// MARK: - 格式化
+//
+// 跟 `src/lib/format.ts` 逐条对齐。这些数字会同时出现在悬浮窗和主面板里，
+// 两处算法不一致的话，同一个值会显示成 "1.5 GB" 和 "1.50 GB"，很难看。
+
+enum Fmt {
+    private static let units = ["B", "KB", "MB", "GB", "TB", "PB"]
+
+    /// 二进制进位（1024）。内存、磁盘容量用它。
+    static func bytes(_ n: Double, digits: Int = 1) -> String {
+        guard n >= 1 else { return "0 B" }
+        var v = n
+        var i = 0
+        while v >= 1024 && i < units.count - 1 {
+            v /= 1024
+            i += 1
+        }
+        return i == 0 ? "\(Int(v)) B" : String(format: "%.\(digits)f %@", v, units[i])
+    }
+
+    static func rate(_ bps: Double) -> String { "\(bytes(bps))/s" }
+
+    /// 拆成数字和单位，方便排版时数字大、单位小。
+    static func splitRate(_ bps: Double) -> (value: String, unit: String) {
+        let s = rate(bps)
+        guard let sp = s.firstIndex(of: " ") else { return (s, "") }
+        return (String(s[s.startIndex..<sp]), String(s[s.index(after: sp)...]))
+    }
+
+    /// 十进制进位（1000）。厂商标 TBW、smartctl 报 Data Units Written 用的都是这个口径，
+    /// 硬盘寿命页如果按 1024 算，数字会和官方标称对不上。
+    static func bytesSI(_ n: Double, digits: Int = 1) -> String {
+        guard n >= 1 else { return "0 B" }
+        var v = n
+        var i = 0
+        while v >= 1000 && i < units.count - 1 {
+            v /= 1000
+            i += 1
+        }
+        return i == 0 ? "\(Int(v)) B" : String(format: "%.\(digits)f %@", v, units[i])
+    }
+
+    /// 悬浮窗底部那种极简写法：`1.2G`、`840K`。
+    static func compact(_ n: Double) -> String {
+        guard n >= 1 else { return "0" }
+        let u = ["B", "K", "M", "G"]
+        var v = n
+        var i = 0
+        while v >= 1024 && i < u.count - 1 {
+            v /= 1024
+            i += 1
+        }
+        return v < 10 ? String(format: "%.1f%@", v, u[i]) : "\(Int(v.rounded()))\(u[i])"
+    }
+
+    static func pct(_ n: Double) -> Double { min(100, max(0, n)) }
+
+    static func tempColor(_ t: Double) -> Color {
+        if t >= 85 { return Palette.danger }
+        if t >= 70 { return Palette.warn }
+        return Palette.ok
+    }
+
+    static func loadColor(_ v: Double) -> Color {
+        if v >= 85 { return Palette.danger }
+        if v >= 65 { return Palette.warn }
+        return Palette.accent
+    }
+
+    /// 秒 → 「3 天 4 小时」/「2h 15m」这种。跟界面语言无关的缩写，
+    /// 因为它在悬浮窗/卡片里只占一行，翻译成完整单词会撑爆。
+    static func uptime(_ secs: UInt64) -> String {
+        let d = secs / 86_400
+        let h = (secs % 86_400) / 3600
+        let m = (secs % 3600) / 60
+        if d > 0 { return "\(d)d \(h)h" }
+        if h > 0 { return "\(h)h \(m)m" }
+        return "\(m)m"
+    }
+}

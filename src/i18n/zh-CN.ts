@@ -205,6 +205,10 @@ export const strings = {
   "w.throughHint": "鼠标穿透（可从托盘关闭）",
   "w.compact": "切换紧凑模式",
   "w.hide": "隐藏悬浮窗",
+  "w.show": "显示悬浮窗",
+  "w.bar": "紧凑条",
+  "w.opacity": "不透明度",
+  "unit.sec": "秒",
 };
 
 /**

@@ -195,6 +195,10 @@ export const strings: Dict = {
   "w.throughHint": "Clic à travers (désactivable depuis la barre de menus)",
   "w.compact": "Passer en mode compact",
   "w.hide": "Masquer le widget",
+  "w.show": "Afficher le widget",
+  "w.bar": "Barre compacte",
+  "w.opacity": "Opacité",
+  "unit.sec": "s",
 };
 
 export const plurals: Plurals = {

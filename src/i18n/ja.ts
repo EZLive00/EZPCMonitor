@@ -190,6 +190,10 @@ export const strings: Dict = {
   "w.throughHint": "マウス透過（トレイから解除できます）",
   "w.compact": "コンパクト表示に切替",
   "w.hide": "ウィジェットを隠す",
+  "w.show": "ウィジェットを表示",
+  "w.bar": "コンパクトバー",
+  "w.opacity": "不透明度",
+  "unit.sec": "秒",
 };
 
 export const plurals: Plurals = {

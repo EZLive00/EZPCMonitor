@@ -192,6 +192,10 @@ export const strings: Dict = {
   "w.throughHint": "Click-through (turn off from the tray)",
   "w.compact": "Switch to compact mode",
   "w.hide": "Hide widget",
+  "w.show": "Show widget",
+  "w.bar": "Compact bar",
+  "w.opacity": "Opacity",
+  "unit.sec": "s",
 };
 
 export const plurals: Plurals = {
