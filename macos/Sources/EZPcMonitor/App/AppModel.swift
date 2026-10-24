@@ -110,7 +110,11 @@ final class AppModel: ObservableObject {
 
     // MARK: - 背景
 
-    /// 换图：先把文件拷进应用数据目录，再一次性改掉 backdrop（只触发一次 didSet）。
+    /// 换图：先把图磨好写进应用数据目录，再一次性改掉 backdrop（只触发一次 didSet）。
+    ///
+    /// 落盘名固定是 `backdrop.jpg`，所以换图之后 `image` 这个字符串没变——didSet 里
+    /// 「名字没变就不重解」的缓存会命中，界面上还是上一张。这里显式作废缓存再解一次。
+    /// 同理，用户重选同一张图时 `backdrop` 和旧值完全相等，didSet 直接返回，也得靠这一手。
     @discardableResult
     func setBackdropImage(from url: URL) -> Bool {
         guard let name = BackdropStore.importImage(from: url) else { return false }
@@ -118,6 +122,8 @@ final class AppModel: ObservableObject {
         next.image = name
         next.kind = .image
         backdrop = next
+        cachedImageName = nil
+        reloadBackdropImage()
         return true
     }
 
