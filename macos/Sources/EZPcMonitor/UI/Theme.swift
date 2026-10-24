@@ -116,6 +116,16 @@ enum Fmt {
         return Palette.accent
     }
 
+    /// 表格里的着色：只有真的高才上色。
+    ///
+    /// 每个数字都染一遍的话，整列都在喊，反而看不出哪个才是异常的那个——
+    /// 而「哪个异常」正是这张表唯一的用处。
+    static func loadTint(_ v: Double) -> Color? {
+        if v >= 85 { return Palette.danger }
+        if v >= 65 { return Palette.warn }
+        return nil
+    }
+
     /// 秒 → 「3 天 4 小时」/「2h 15m」这种。跟界面语言无关的缩写，
     /// 因为它在悬浮窗/卡片里只占一行，翻译成完整单词会撑爆。
     static func uptime(_ secs: UInt64) -> String {

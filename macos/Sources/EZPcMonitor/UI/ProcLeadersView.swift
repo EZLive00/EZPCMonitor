@@ -115,7 +115,7 @@ struct ProcLeadersView: View {
                     .foregroundStyle(c == col ? Color.primary : Color.secondary)
                 }
                 .buttonStyle(.plain)
-                .frame(width: 96)
+                .frame(width: Self.width(c))
             }
         }
         .font(.system(size: 9.5, weight: .semibold))
@@ -153,7 +153,7 @@ struct ProcLeadersView: View {
 
             ForEach(LeadersLogic.cols(for: dim), id: \.self) { c in
                 cell(r, c, mean: meanPct, peak: peakPct)
-                    .frame(width: 96)
+                    .frame(width: Self.width(c))
             }
         }
         .padding(.vertical, 3)
@@ -167,31 +167,28 @@ struct ProcLeadersView: View {
         let text = LeadersLogic.format(dim, c, v)
 
         if c == .mean {
-            // 条形当单元格背景：均值填实、峰值那段用淡色续上。
-            // 单独在数字前面塞一根 40pt 的条会让数字对不齐，
-            // 而这里的三个数字列必须能一眼上下比较。
-            ZStack(alignment: .trailing) {
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        RoundedRectangle(cornerRadius: 3, style: .continuous)
-                            .fill(Color.primary.opacity(0.05))
-                        HStack(spacing: 0) {
-                            Rectangle()
-                                .fill(Palette.cpu.opacity(0.55))
-                                .frame(width: geo.size.width * mean / 100)
-                            Rectangle()
-                                .fill(Palette.cpu.opacity(0.22))
-                                .frame(width: geo.size.width * max(0, peak) / 100)
-                        }
-                        .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
+            // 条形放在数字**前面**而不是垫在底下：垫底的话数字压在浅色填充上，
+            // 深浅两种背景下的对比度都不稳，而且三个数字列会看起来像三个色块。
+            HStack(spacing: 5) {
+                Spacer(minLength: 0)
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.primary.opacity(0.07))
+                    HStack(spacing: 0) {
+                        Rectangle()
+                            .fill(Palette.cpu.opacity(0.8))
+                            .frame(width: Self.barWidth * CGFloat(mean / 100))
+                        Rectangle()
+                            .fill(Palette.cpu.opacity(0.28))
+                            .frame(width: Self.barWidth * CGFloat(max(0, peak) / 100))
                     }
+                    .clipShape(Capsule())
                 }
+                .frame(width: Self.barWidth, height: 6)
+
                 Text(text)
                     .font(.system(size: 10.5, design: .monospaced))
                     .monospacedDigit()
-                    .padding(.trailing, 4)
             }
-            .frame(height: 16)
         } else {
             Text(text)
                 .font(.system(size: 10.5, design: .monospaced))
@@ -205,6 +202,19 @@ struct ProcLeadersView: View {
                         ]))
         }
     }
+
+    /// 列宽按内容给：均值那列要放条+数字，峰值/活跃只要数字。
+    /// 平均条用 56pt 而不是 36pt——归一化基准是全场峰值，常见的均值只有个位数
+    /// 百分比，条太短就成了一根浮着的小短线，反而看不出差异。
+    private static func width(_ c: ColKey) -> CGFloat {
+        switch c {
+        case .mean: return 124
+        case .peak: return 100
+        default: return 88
+        }
+    }
+
+    private static let barWidth: CGFloat = 56
 }
 
 private extension View {

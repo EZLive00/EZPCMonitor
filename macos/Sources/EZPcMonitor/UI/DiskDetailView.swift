@@ -50,33 +50,34 @@ struct DiskDetailView: View {
             header
             Hairline().padding(.top, 10)
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    if let health {
-                        metaLine(health)
-                        statRow(health)
-                        ioSection
-                    } else {
-                        Text(i18n.t("dd.smartLoading"))
-                            .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
-                    }
-
-                    benchSection
-
-                    if let health {
-                        smartSection(health)
-                    }
+            // 只有 SMART 属性表滚动，上面的身份行 / 数字块 / 曲线 / 测速固定住。
+            // 整页塞进 ScrollView 的话，滚到属性表第 12 行时「磨损 0%」这种
+            // 一眼就该看到的结论会滚出视野。
+            VStack(alignment: .leading, spacing: 14) {
+                if let health {
+                    metaLine(health)
+                    statRow(health)
+                    ioSection
+                } else {
+                    Text(i18n.t("dd.smartLoading"))
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
                 }
-                .padding(.vertical, 14)
+
+                benchSection
+
+                if let health {
+                    smartSection(health)
+                }
             }
-            .scrollIndicators(.automatic)
+            .padding(.vertical, 14)
+            .frame(maxHeight: .infinity, alignment: .top)
 
             Hairline()
             footer
         }
         .padding(18)
-        .frame(width: 720, height: 640)
+        .frame(width: 720, height: 700)
         .background(Color(nsColor: .windowBackgroundColor))
     }
 
@@ -244,7 +245,12 @@ struct DiskDetailView: View {
     // MARK: SMART
 
     private func smartSection(_ h: DiskHealth) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        // 表格高度算出来而不是靠弹性布局：不同盘的属性条数从 8 到 40 都有，
+        // 让 ScrollView 自己决定高度会让整张 sheet 的高度跟着盘变，
+        // 每次打开都跳一下。这里夹到 240，多出来的部分滚动看。
+        let tableHeight = min(200, CGFloat(h.attrs.count) * 21 + 26)
+
+        return VStack(alignment: .leading, spacing: 6) {
             sectionTitle(i18n.t("dd.smart"), tag: i18n.tn("p.attrs", Double(h.attrs.count)))
 
             VStack(spacing: 0) {
@@ -262,29 +268,15 @@ struct DiskDetailView: View {
 
                 Hairline()
 
-                ForEach(h.attrs) { a in
-                    HStack(spacing: 8) {
-                        Text(a.name)
-                            .font(.system(size: 10.5))
-                            .foregroundStyle(a.critical ? Palette.warn : Color.primary)
-                            .lineLimit(1)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        Text(a.value.isEmpty ? "—" : a.value)
-                            .font(.system(size: 10.5, design: .monospaced))
-                            .monospacedDigit()
-                            .foregroundStyle(a.critical ? Palette.warn : Color.secondary)
-                            .lineLimit(1)
-                            .frame(width: 150, alignment: .leading)
-                        Text(a.extra)
-                            .font(.system(size: 10))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                            .frame(width: 210, alignment: .leading)
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        ForEach(h.attrs) { a in
+                            attrRow(a)
+                        }
                     }
-                    .padding(.vertical, 3.5)
-                    .background(a.critical ? Palette.warn.opacity(0.07) : Color.clear)
                 }
+                .scrollIndicators(.automatic)
+                .frame(height: tableHeight)
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
@@ -297,6 +289,30 @@ struct DiskDetailView: View {
                 note(n)
             }
         }
+    }
+
+    private func attrRow(_ a: SmartAttr) -> some View {
+        HStack(spacing: 8) {
+            Text(a.name)
+                .font(.system(size: 10.5))
+                .foregroundStyle(a.critical ? Palette.warn : Color.primary)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Text(a.value.isEmpty ? "—" : a.value)
+                .font(.system(size: 10.5, design: .monospaced))
+                .monospacedDigit()
+                .foregroundStyle(a.critical ? Palette.warn : Color.secondary)
+                .lineLimit(1)
+                .frame(width: 150, alignment: .leading)
+            Text(a.extra)
+                .font(.system(size: 10))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .frame(width: 210, alignment: .leading)
+        }
+        .padding(.vertical, 3.5)
+        .background(a.critical ? Palette.warn.opacity(0.07) : Color.clear)
     }
 
     // MARK: 小工具

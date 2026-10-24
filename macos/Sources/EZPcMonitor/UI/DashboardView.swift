@@ -633,7 +633,7 @@ struct DashboardView: View {
             Text(String(format: "%.1f%%", p.cpu))
                 .font(.system(size: 10.5, design: .monospaced))
                 .monospacedDigit()
-                .foregroundStyle(Fmt.loadColor(p.cpu))
+                .foregroundStyle(Fmt.loadTint(p.cpu) ?? Color.primary)
                 .frame(width: 68, alignment: .trailing)
             Text(Fmt.bytes(Double(p.mem), digits: 0))
                 .font(.system(size: 10.5, design: .monospaced))

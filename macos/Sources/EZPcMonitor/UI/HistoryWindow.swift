@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import SystemConfiguration
 
 // MARK: - 窗口
 
@@ -128,7 +129,12 @@ struct HistoryView: View {
         .padding(.bottom, 14)
         .frame(minWidth: 820, minHeight: 560)
         .background(Color(nsColor: .windowBackgroundColor))
-        .task(id: range) { await load() }
+        .task(id: range) {
+            await load()
+            // 开发钩子：`--report` 一进来就出一张图存到「下载」，
+            // 用来回归报告版面和 ImageRenderer 的导出，省得每次都手点。
+            if CommandLine.arguments.contains("--report") { await makeReport(copy: false) }
+        }
         .task { stats = await fetchStats() }
     }
 
@@ -320,9 +326,16 @@ struct HistoryView: View {
         guard busy == nil, !rows.isEmpty else { return }
         busy = copy ? "copy" : "report"
 
+        // 历史窗口可以比主面板先打开，那时候模型里还没有第一拍快照。
+        // 不补这一下，报告抬头就会写成「Mac ·」——中间那个点后面什么都没有。
+        model.refreshNow()
+        let snap = model.snapshot
+        let host = snap?.host.name ?? Self.computerName()
+        let os = snap?.host.os ?? ""
+
         let input = ReportInput(
-            host: model.snapshot?.host.name ?? "Mac",
-            os: model.snapshot?.host.os ?? "",
+            host: host,
+            os: os,
             rangeLabel: i18n.retention(range ?? retention),
             points: rows,
             procs: leaders?.rows ?? [],
@@ -348,6 +361,15 @@ struct HistoryView: View {
             NSWorkspace.shared.activateFileViewerSelecting([url])
         }
         busy = nil
+    }
+
+    /// 报告抬头要写用户在「系统设置」里看到的那台机器名，而不是 DNS 主机名——
+    /// 后者常是 `wargondebijibendiannao.local` 这种拼音串，放进报告里很难看。
+    private static func computerName() -> String {
+        if let n = SCDynamicStoreCopyComputerName(nil, nil) as String?, !n.isEmpty {
+            return n
+        }
+        return ProcessInfo.processInfo.hostName.replacingOccurrences(of: ".local", with: "")
     }
 
     @MainActor

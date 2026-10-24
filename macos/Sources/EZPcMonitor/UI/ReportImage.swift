@@ -142,7 +142,7 @@ private struct ReportPage: View {
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(theme.accent)
             }
-            Text("\(input.host) · \(input.os)")
+            Text(input.os.isEmpty ? input.host : "\(input.host) · \(input.os)")
                 .font(.system(size: 14))
                 .foregroundStyle(theme.dim)
         }
