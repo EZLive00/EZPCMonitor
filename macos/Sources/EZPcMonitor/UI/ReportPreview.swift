@@ -20,6 +20,9 @@ final class ReportPreviewWindow: NSWindow {
         title = "Report"
         useUnifiedChrome()
         minSize = NSSize(width: 560, height: 460)
+        // 见 DashboardWindow：关窗时 AppKit 默认还会 release 一次，
+        // 而 controller 紧接着 `window = nil`，多出来的那次是双重释放
+        isReleasedWhenClosed = false
         contentView = NSHostingView(rootView: AnyView(content))
         center()
     }

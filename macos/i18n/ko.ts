@@ -196,6 +196,7 @@ export const strings: Dict = {
   "w.pin": "항상 위에",
   "w.clickThrough": "마우스 통과",
   "w.openDash": "메인 패널 열기",
+  "w.closeDash": "메인 패널 닫기",
   "w.quit": "종료",
   "w.restoreCard": "카드로 복귀",
   "w.card": "카드",

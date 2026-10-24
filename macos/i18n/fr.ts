@@ -201,6 +201,7 @@ export const strings: Dict = {
   "w.pin": "Toujours au premier plan",
   "w.clickThrough": "Clic à travers",
   "w.openDash": "Ouvrir le panneau",
+  "w.closeDash": "Fermer le panneau",
   "w.quit": "Quitter",
   "w.restoreCard": "Revenir à la carte",
   "w.card": "Carte",

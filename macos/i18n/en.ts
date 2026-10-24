@@ -198,6 +198,7 @@ export const strings: Dict = {
   "w.pin": "Always on top",
   "w.clickThrough": "Click-through",
   "w.openDash": "Open dashboard",
+  "w.closeDash": "Close dashboard",
   "w.quit": "Quit",
   "w.restoreCard": "Back to card",
   "w.card": "Card",

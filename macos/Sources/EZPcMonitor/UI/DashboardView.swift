@@ -21,6 +21,13 @@ final class DashboardWindow: NSWindow {
         isOpaque = false
         backgroundColor = .clear
         minSize = NSSize(width: 880, height: 660)
+        // 必须显式关掉。程序化创建的 NSWindow 默认 isReleasedWhenClosed = true，
+        // AppKit 会在关窗时自己 release 一次；而 DashboardController 在
+        // windowWillClose 里又把 window 置 nil，等于第二次 release。
+        // 多出来的那次不会当场炸，而是等当前 runloop 回调的自动释放池排空时，
+        // 对着已经释放的对象再发一次消息——EXC_BAD_ACCESS，栈里只有
+        // objc_msgSend ← AutoreleasePoolPage::releaseUntil，看不出是谁。
+        isReleasedWhenClosed = false
         contentView = NSHostingView(rootView: AnyView(content))
         center()
         setFrameAutosaveName("ezpcm.dashboard")
@@ -59,13 +66,23 @@ final class DashboardController: NSObject, NSWindowDelegate {
             w.delegate = self
             window = w
         }
-        window?.makeKeyAndOrderFront(nil)
+        guard let w = window else { return }
+        // 托盘菜单点「打开主面板」时窗口可能只是被最小化了，
+        // makeKeyAndOrderFront 不会把它从 Dock 里捞出来
+        if w.isMiniaturized { w.deminiaturize(nil) }
+        w.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         onVisibilityChanged(true)
         // 主面板开着才需要进程列表；关掉就停采，省一次全表遍历
         model.engine.setWantProcs(true)
         model.refreshNow()
         model.startHealthPolling()
+    }
+
+    /// 从托盘菜单关掉主面板。走 `performClose` 而不是 `orderOut`：
+    /// 只有真的关窗才会触发 `windowWillClose`，那里的收尾（停采、还原悬浮窗）不能跳过。
+    func close() {
+        window?.performClose(nil)
     }
 
     /// 关窗就把窗口整个放掉，顺便停掉进程采集。

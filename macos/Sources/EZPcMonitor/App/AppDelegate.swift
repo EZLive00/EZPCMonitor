@@ -24,6 +24,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         status = StatusItemController(model: model, widget: widget)
 
         status.onOpenDashboard = { [weak self] in self?.openDashboard() }
+        status.onCloseDashboard = { [weak self] in self?.dashboard?.close() }
+        status.isDashboardVisible = { [weak self] in self?.dashboard?.isVisible ?? false }
         status.onOpenHistory = { [weak self] in self?.openHistory() }
         status.onOpenSettings = { [weak self] in self?.openSettings() }
         widget.onOpenDashboard = { [weak self] in self?.openDashboard() }
@@ -69,9 +71,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             dashboard = DashboardController(model: model)
             dashboard?.onOpenHistory = { [weak self] in self?.openHistory() }
             dashboard?.onOpenSettings = { [weak self] in self?.openSettings() }
-            // 互斥：面板一开收起悬浮窗，关掉再放回去
+            // 互斥：面板一开收起悬浮窗，关掉再放回来（见 WidgetController.setDashboardOpen）
             dashboard?.onVisibilityChanged = { [weak self] open in
-                self?.widget.suppressForDashboard(open)
+                self?.widget.setDashboardOpen(open)
             }
         }
         dashboard?.show()

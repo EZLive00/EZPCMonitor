@@ -88,35 +88,25 @@ final class WidgetController {
 
     var isVisible: Bool { panel.isVisible }
 
-    /// 被主面板「顶掉」的悬浮窗。主面板关掉时要还原，但**只还原被顶掉的那个**——
-    /// 用户自己点 ✕ 收起来的悬浮窗，不该在看完全主面板之后自己冒出来。
-    private var hiddenByDashboard = false
-
     func show() {
-        hiddenByDashboard = false
         panel.orderFrontRegardless()
         // 内容改了之后窗口阴影要重算，否则圆角外面会留一圈方的
         panel.invalidateShadow()
     }
 
     func hide() {
-        hiddenByDashboard = false
         panel.orderOut(nil)
     }
 
     func toggle() { isVisible ? hide() : show() }
 
-    /// 主面板与悬浮窗互斥：面板一开就把挂件收起来，关掉再放回去。
+    /// 主面板与悬浮窗互斥：面板一开就把挂件收起来，关掉再放回来。
     /// 桌面上同时挂两个窗口既占地方，显示的还是同一份数据。
-    func suppressForDashboard(_ on: Bool) {
-        if on {
-            let wasVisible = isVisible
-            panel.orderOut(nil)
-            hiddenByDashboard = wasVisible
-        } else if hiddenByDashboard {
-            hiddenByDashboard = false
-            show()
-        }
+    ///
+    /// **单向**：关掉悬浮窗不会把主面板拉起来。用户点挂件上的 ✕ 是想让它消失，
+    /// 不是想换一个更大的窗口看同一份数据。
+    func setDashboardOpen(_ open: Bool) {
+        if open { panel.orderOut(nil) } else { show() }
     }
 
     // MARK: - 外观

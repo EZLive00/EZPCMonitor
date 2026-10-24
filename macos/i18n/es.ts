@@ -201,6 +201,7 @@ export const strings: Dict = {
   "w.pin": "Siempre visible",
   "w.clickThrough": "Clic a través",
   "w.openDash": "Abrir el panel",
+  "w.closeDash": "Cerrar el panel",
   "w.quit": "Salir",
   "w.restoreCard": "Volver a la tarjeta",
   "w.card": "Tarjeta",

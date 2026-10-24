@@ -196,6 +196,7 @@ export const strings: Dict = {
   "w.pin": "最前面に固定",
   "w.clickThrough": "マウス透過",
   "w.openDash": "メインパネルを開く",
+  "w.closeDash": "メインパネルを閉じる",
   "w.quit": "終了",
   "w.restoreCard": "カードに戻す",
   "w.card": "カード",

@@ -211,6 +211,7 @@ export const strings = {
   "w.pin": "保持置顶",
   "w.clickThrough": "鼠标穿透",
   "w.openDash": "打开主面板",
+  "w.closeDash": "关闭主面板",
   "w.quit": "退出",
   "w.restoreCard": "恢复为卡片",
   "w.card": "卡片",

@@ -10,10 +10,14 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     private let model: AppModel
     private let widget: WidgetController
     private let item: NSStatusItem
+    private let menu = NSMenu()
 
     var onOpenDashboard: () -> Void = {}
+    var onCloseDashboard: () -> Void = {}
     var onOpenHistory: () -> Void = {}
     var onOpenSettings: () -> Void = {}
+    /// 菜单要按主面板当前开没开决定那一行写「打开」还是「关闭」。
+    var isDashboardVisible: () -> Bool = { false }
 
     init(model: AppModel, widget: WidgetController) {
         self.model = model
@@ -26,20 +30,53 @@ final class StatusItemController: NSObject, NSMenuDelegate {
             image?.isTemplate = true
             button.image = image
             button.toolTip = "EZPcMonitor"
+            // 左键开主面板，右键才弹菜单。
+            //
+            // 这里**不能**给 `item.menu` 赋值：一旦设了 menu，点击会被菜单接管，
+            // button 的 action 永远收不到，「点图标开主面板」就无从谈起。菜单改成
+            // 右键时手动 popUp。
+            button.target = self
+            button.action = #selector(statusButtonClicked)
+            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
 
-        let menu = NSMenu()
         menu.autoenablesItems = false
         menu.delegate = self
-        item.menu = menu
     }
 
     private var i18n: L10n { L10n.shared }
 
+    /// 这一次点击算不算「次要点击」（右键 / Control-点）。
+    ///
+    /// 单独拎出来是因为它只有一行判断，却决定了整个交互模型——左键开面板、
+    /// 右键弹菜单。而 `NSApp.currentEvent` 在自动化测试里造不出来，做成纯函数
+    /// 才能把两条分支都验一遍。
+    static func isSecondaryClick(_ event: NSEvent?) -> Bool {
+        guard let event else { return false }
+        return event.type == .rightMouseUp || event.modifierFlags.contains(.control)
+    }
+
+    /// 左键：开主面板（已经开着就提到前面来）。右键 / Control-点：弹菜单。
+    @objc private func statusButtonClicked() {
+        guard let button = item.button else { return onOpenDashboard() }
+        guard Self.isSecondaryClick(NSApp.currentEvent) else { return onOpenDashboard() }
+
+        // popUp 不一定会走 menuNeedsUpdate（取决于这次 runloop 的时机），
+        // 手动刷一次，菜单里的标题和勾才是当下的状态。
+        menuNeedsUpdate(menu)
+        menu.popUp(positioning: nil, at: NSPoint(x: 0, y: button.bounds.height + 4), in: button)
+    }
+
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
 
-        menu.addItem(action(i18n.t("w.openDash"), #selector(openDashboard), key: "d"))
+        // 主面板这一行是「开关」，标题跟着当前状态走
+        let dashOpen = isDashboardVisible()
+        menu.addItem(
+            dashOpen
+                ? action(i18n.t("w.closeDash"), #selector(closeDashboard), key: "d")
+                : action(i18n.t("w.openDash"), #selector(openDashboard), key: "d")
+        )
         menu.addItem(action(i18n.t("hist.title"), #selector(openHistory), key: "r"))
 
         let toggleTitle = widget.isVisible ? i18n.t("w.hide") : i18n.t("w.show")
@@ -112,9 +149,21 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     // MARK: - 动作
 
     @objc private func openDashboard() { onOpenDashboard() }
+    @objc private func closeDashboard() { onCloseDashboard() }
     @objc private func openHistory() { onOpenHistory() }
     @objc private func openSettings() { onOpenSettings() }
-    @objc private func toggleWidget() { widget.toggle() }
+
+    /// 互斥是双向的：要让挂件出来，就得先收起主面板——否则桌面上会同时挂着
+    /// 两个显示同一份数据的窗口。关主面板本身也会把挂件放回来（`windowWillClose`），
+    /// 这里的 `show()` 是给「主面板根本没开」那条路兜底的，重复调用无副作用。
+    @objc private func toggleWidget() {
+        guard widget.isVisible else {
+            if isDashboardVisible() { onCloseDashboard() }
+            widget.show()
+            return
+        }
+        widget.hide()
+    }
     @objc private func setCard() { model.mode = .card }
     @objc private func setBar() { model.mode = .bar }
 

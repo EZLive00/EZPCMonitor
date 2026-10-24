@@ -196,6 +196,7 @@ export const strings: Dict = {
   "w.pin": "保持置頂",
   "w.clickThrough": "滑鼠穿透",
   "w.openDash": "開啟主面板",
+  "w.closeDash": "關閉主面板",
   "w.quit": "結束",
   "w.restoreCard": "恢復為卡片",
   "w.card": "卡片",

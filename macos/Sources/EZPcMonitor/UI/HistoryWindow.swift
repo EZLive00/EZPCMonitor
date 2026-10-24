@@ -15,6 +15,9 @@ final class HistoryWindow: NSWindow {
         title = "History"
         useUnifiedChrome()
         minSize = NSSize(width: 820, height: 560)
+        // 见 DashboardWindow：程序化创建的窗口默认会自己 release 一次，
+        // 和 controller 里 `window = nil` 撞成双重释放
+        isReleasedWhenClosed = false
         contentView = NSHostingView(rootView: AnyView(content))
         center()
         setFrameAutosaveName("ezpcm.history")
