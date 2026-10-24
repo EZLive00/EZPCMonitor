@@ -43,6 +43,21 @@ final class AppModel: ObservableObject {
         didSet { defaults.set(clickThrough, forKey: Keys.clickThrough); onClickThroughChanged?() }
     }
 
+    /// 主面板背景。改一次就存一次，下次启动直接恢复。
+    @Published var backdrop: Backdrop {
+        didSet {
+            guard oldValue != backdrop else { return }
+            defaults.set(try? JSONEncoder().encode(backdrop), forKey: Keys.backdrop)
+            reloadBackdropImage()
+        }
+    }
+
+    /// 解码后的背景图（已经缩到 1400px）。单独存一份是为了
+    /// 别让 `Backdrop` 这个 Codable 结构体拖着 `NSImage` 跑。
+    @Published private(set) var backdropImage: NSImage?
+
+    private var cachedImageName: String?
+
     // 由 AppDelegate 挂上的副作用。放在这里是为了让「改一个值」和
     // 「窗口跟着变」在同一处发生，而不是散在几个视图的 onChange 里。
     var onModeChanged: (() -> Void)?
@@ -63,6 +78,7 @@ final class AppModel: ObservableObject {
         static let opacity = "ezpcm.opacity"
         static let pinned = "ezpcm.pinned"
         static let clickThrough = "ezpcm.clickThrough"
+        static let backdrop = "ezpcm.backdrop"
     }
 
     init(engine: CoreEngine) {
@@ -75,6 +91,11 @@ final class AppModel: ObservableObject {
         pinned = defaults.object(forKey: Keys.pinned) as? Bool ?? true
         clickThrough = defaults.object(forKey: Keys.clickThrough) as? Bool ?? false
 
+        let savedBackdrop = defaults.data(forKey: Keys.backdrop)
+            .flatMap { try? JSONDecoder().decode(Backdrop.self, from: $0) }
+        backdrop = savedBackdrop ?? Backdrop()
+        backdropImage = savedBackdrop?.image.flatMap { BackdropStore.load($0) }
+
         systemLocale = engine.locale()
         settings = engine.settings()
         L10n.shared.setLanguage(settings.resolvedLanguage(systemLocale: systemLocale))
@@ -85,6 +106,39 @@ final class AppModel: ObservableObject {
 
         applyAppearance()
         restartTimer()
+    }
+
+    // MARK: - 背景
+
+    /// 换图：先把文件拷进应用数据目录，再一次性改掉 backdrop（只触发一次 didSet）。
+    @discardableResult
+    func setBackdropImage(from url: URL) -> Bool {
+        guard let name = BackdropStore.importImage(from: url) else { return false }
+        var next = backdrop
+        next.image = name
+        next.kind = .image
+        backdrop = next
+        return true
+    }
+
+    func clearBackdropImage() {
+        var next = backdrop
+        next.image = nil
+        if next.kind == .image { next.kind = .material }
+        backdrop = next
+        BackdropStore.removeAll()
+    }
+
+    /// 只在文件名变了才重新解码：同一次运行里来回切「材质 ↔ 图片」不该反复解图。
+    private func reloadBackdropImage() {
+        guard let name = backdrop.image else {
+            backdropImage = nil
+            cachedImageName = nil
+            return
+        }
+        guard cachedImageName != name else { return }
+        backdropImage = BackdropStore.load(name)
+        cachedImageName = name
     }
 
     // MARK: - 轮询

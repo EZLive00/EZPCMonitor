@@ -16,6 +16,10 @@ final class DashboardWindow: NSWindow {
         // 那条分隔线来自标题栏自己，不是标题文字。
         title = "EZPcMonitor"
         useUnifiedChrome()
+        // 背景由内容里的 BackdropLayer 画，窗口自己必须是透的，
+        // 否则「材质 / 半透明纯色 / 图片」都会被窗口底色盖住。
+        isOpaque = false
+        backgroundColor = .clear
         minSize = NSSize(width: 880, height: 660)
         contentView = NSHostingView(rootView: AnyView(content))
         center()
@@ -115,7 +119,16 @@ struct DashboardView: View {
         .padding(.top, 14)
         .padding(.bottom, 16)
         .frame(minWidth: 880, minHeight: 660)
-        .background(Color(nsColor: .windowBackgroundColor))
+        // 背景铺满整个窗口（含标题栏那 28pt），所以必须 ignoresSafeArea——
+        // 否则红绿灯那条会露成窗口底色，接缝比原来那条分隔线还难看。
+        .background {
+            BackdropLayer(backdrop: model.backdrop, image: model.backdropImage)
+                .ignoresSafeArea()
+        }
+        // 窗口一旦设成 isOpaque = false，系统就不再替我们切圆角了（不透明窗口的
+        // 圆角是窗口自己画的）。内容铺满整个窗口之后，只能自己裁——10pt 是
+        // Big Sur 之后标准窗口的圆角半径。
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .sheet(item: $detail) { d in
             DiskDetailView(
                 disk: d,

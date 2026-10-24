@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 // MARK: - 窗口
 
@@ -125,6 +126,7 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 18) {
                     monitorGroup
                     generalGroup
+                    appearanceGroup
                     historyGroup
                     aboutGroup
                 }
@@ -229,6 +231,164 @@ struct SettingsView: View {
                 }
             }
         }
+    }
+
+    // MARK: 外观（主面板背景）
+
+    private var appearanceGroup: some View {
+        group(i18n.t("set.group.appearance")) {
+            row(i18n.t("set.backdrop"), hint: i18n.t("set.backdropHint")) {
+                HStack(spacing: 8) {
+                    materialSwatch
+                    ForEach(Backdrop.colors) { c in colorSwatch(c) }
+                    imageSwatch
+                    Spacer()
+                }
+            }
+
+            row(i18n.t("w.opacity"), hint: i18n.t("set.backdropOpacityHint")) {
+                HStack(spacing: 10) {
+                    Slider(
+                        value: Binding(
+                            get: { model.backdrop.opacity },
+                            set: { v in
+                                var next = model.backdrop
+                                next.opacity = v
+                                model.backdrop = next
+                            }
+                        ),
+                        in: 0.6...1
+                    )
+                    .frame(width: 190)
+                    // 系统材质的不透明度由系统控制，这个滑杆对它没意义
+                    .disabled(model.backdrop.kind == .material)
+                    .opacity(model.backdrop.kind == .material ? 0.4 : 1)
+
+                    Text("\(Int((model.backdrop.opacity * 100).rounded()))%")
+                        .font(.system(size: 10.5)).monospacedDigit()
+                        .foregroundStyle(model.backdrop.kind == .material ? .tertiary : .secondary)
+                        .frame(width: 34, alignment: .leading)
+                    Spacer()
+                }
+            }
+        }
+    }
+
+    private var materialSwatch: some View {
+        swatch(on: model.backdrop.kind == .material, help: i18n.t("set.backdropMaterial")) {
+            var next = model.backdrop
+            next.kind = .material
+            model.backdrop = next
+        } label: {
+            // 纯白方块和「浅色纯色」那一排分不出来，所以给它加一道斜向高光：
+            // 看起来像一块玻璃，而不是一个白色色块。
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(0.85),
+                            Color.white.opacity(0.22),
+                            Color.white.opacity(0.62),
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .strokeBorder(Color.primary.opacity(0.18), lineWidth: 0.8)
+                )
+        }
+    }
+
+    private func colorSwatch(_ c: BackdropColor) -> some View {
+        swatch(on: model.backdrop.kind == .solid && model.backdrop.color == c.id, help: nil) {
+            var next = model.backdrop
+            next.kind = .solid
+            next.color = c.id
+            model.backdrop = next
+        } label: {
+            RoundedRectangle(cornerRadius: 6, style: .continuous).fill(c.color)
+        }
+    }
+
+    private var imageSwatch: some View {
+        // 点击语义：没图 → 选图；有图但没在用 → 应用它；已经在用 → 什么都不做。
+        // 「换一张」要先从右键菜单清空。原来点一下永远弹文件面板，等于把
+        // 「应用」这个动作吃掉了——用户选完图想再点回去就没有入口。
+        swatch(on: model.backdrop.kind == .image, help: imageHelp) {
+            if model.backdrop.image == nil {
+                pickBackdropImage()
+            } else if model.backdrop.kind != .image {
+                var next = model.backdrop
+                next.kind = .image
+                model.backdrop = next
+            }
+        } label: {
+            Group {
+                if let img = model.backdropImage {
+                    Image(nsImage: img)
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    Image(systemName: "photo")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(Color.primary.opacity(0.06))
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        }
+        .contextMenu {
+            if model.backdrop.image != nil {
+                Button(i18n.t("set.backdropReplace")) { pickBackdropImage() }
+                Button(i18n.t("set.clear")) { model.clearBackdropImage() }
+            }
+        }
+    }
+
+    private var imageHelp: String {
+        if model.backdrop.image == nil { return i18n.t("set.backdropImage") }
+        if model.backdrop.kind != .image { return i18n.t("set.backdropApply") }
+        return i18n.t("set.backdropInUse")
+    }
+
+    /// 色块通用外壳：选中时套一圈主题色描边。
+    private func swatch<L: View>(
+        on: Bool,
+        help: String?,
+        action: @escaping () -> Void,
+        @ViewBuilder label: () -> L
+    ) -> some View {
+        Button(action: action) {
+            label()
+                .frame(width: 26, height: 26)
+                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .strokeBorder(on ? Palette.accent : Color.primary.opacity(0.10),
+                                      lineWidth: on ? 2 : 0.8)
+                )
+                .padding(2)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .strokeBorder(on ? Palette.accent.opacity(0.35) : .clear, lineWidth: 1)
+                )
+        }
+        .buttonStyle(.plain)
+        .help(help ?? "")
+    }
+
+    private func pickBackdropImage() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.image]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.message = i18n.t("set.backdropImage")
+        panel.prompt = i18n.t("set.backdropImage")
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        model.setBackdropImage(from: url)
     }
 
     private func themeTile(_ tag: String, _ title: String, on: Bool, action: @escaping () -> Void) -> some View {
