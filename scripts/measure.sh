@@ -7,6 +7,8 @@
 #   ./scripts/measure.sh              # 构建后测量，结果追加到 docs/PERF.md
 #   ./scripts/measure.sh --no-build   # 直接用现有产物
 #   ./scripts/measure.sh --note "主面板背景"   # 给这一行加个说明
+#   ./scripts/measure.sh --backdrop '{"kind":"image","image":"backdrop.jpg"}'
+#                                     # 量图片背景那一档（默认量系统材质）
 #
 # 量的是什么：
 #   .app / 二进制      磁盘占用（`du`、`stat`）
@@ -30,10 +32,12 @@ PROBE="/tmp/ezpcm-probe-bin"
 
 BUILD=1
 NOTE=""
+BD='{"kind":"material","color":"graphite","opacity":0.94}'
 while [ $# -gt 0 ]; do
   case "$1" in
     --no-build) BUILD=0 ;;
     --note) shift; NOTE="${1:-}" ;;
+    --backdrop) shift; BD="${1:-}" ;;
     *) echo "未知参数: $1" >&2; exit 2 ;;
   esac
   shift
@@ -75,6 +79,12 @@ JSON
 defaults write dev.ezpc.monitor ezpcm.mode -string "card"
 defaults write dev.ezpc.monitor ezpcm.opacity -float 1.0
 defaults write dev.ezpc.monitor ezpcm.clickThrough -bool false
+
+# 主面板背景也固定住。默认是系统材质（也是最省的一档）；要量图片背景就传
+# --backdrop '{"kind":"image","image":"backdrop.jpg"}'。不固定的话，用户上次
+# 挑的那张照片会跟着进测量，两张表就没法比了。
+BD_HEX=$(printf '%s' "$BD" | xxd -p | tr -d '\n')
+defaults write dev.ezpc.monitor ezpcm.backdrop -data "$BD_HEX"
 
 # ---------------------------------------------------------------- 构建
 
@@ -137,7 +147,9 @@ echo "    footprint ${FP_D}MB / rss $(awk -v b="$RSS_D" 'BEGIN{printf "%.0f", b/
 
 # ---------------------------------------------------------------- 体积
 
-APP_MB=$(du -sm "$APP" | cut -f1)
+# 体积用 0.1MB 精度：`du -sm` 会把 5.9 报成 6、6.2 报成 7，
+# 一个 +0.3MB 的改动看起来像 +1MB——这个项目的体积敏感，取整会把结论搞反。
+APP_MB=$(awk -v k="$(du -sk "$APP" | cut -f1)" 'BEGIN{printf "%.1f", k/1024}')
 BIN_MB=$(awk -v b="$(stat -f%z "$BIN")" 'BEGIN{printf "%.1f", b/1048576}')
 SHA=$(git -C "$ROOT" rev-parse --short HEAD)
 DATE=$(date +%Y-%m-%d)
@@ -160,6 +172,12 @@ if [ ! -f "$PERF" ]; then
 | 日期 | 提交 | 说明 | .app | 二进制 | 悬浮窗 footprint | 悬浮窗 RSS | 主面板 footprint | CPU 1s | CPU 5s |
 |---|---|---|---|---|---|---|---|---|---|
 HEAD
+fi
+
+# 非默认背景时在说明里带一笔，不然一行数字看不出量的是哪个形态
+if [ "$BD" != '{"kind":"material","color":"graphite","opacity":0.94}' ]; then
+  KIND=$(printf '%s' "$BD" | sed -n 's/.*"kind":"\([a-z]*\)".*/\1/p')
+  NOTE="${NOTE:+$NOTE · }背景=$KIND"
 fi
 
 ROW="| $DATE | \`$SHA\` | ${NOTE:--} | ${APP_MB} MB | ${BIN_MB} MB | ${FP_W} MB | ${RSS_W_MB} MB | ${FP_D} MB | ${CPU_1}% | ${CPU_5}% |"
