@@ -53,7 +53,5 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             dashboard = DashboardController(model: model)
         }
         dashboard?.show(settings: settings)
-        // 主面板开着才需要进程列表；关掉就停采，省一次全表遍历
-        model.engine.setWantProcs(true)
     }
 }

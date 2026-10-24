@@ -25,23 +25,37 @@ final class DashboardWindow: NSWindow {
 }
 
 @MainActor
-final class DashboardController {
+final class DashboardController: NSObject, NSWindowDelegate {
     private let model: AppModel
     private var window: DashboardWindow?
 
     init(model: AppModel) {
         self.model = model
+        super.init()
     }
 
     func show(settings: Bool) {
         if window == nil {
-            window = DashboardWindow(
+            let w = DashboardWindow(
                 content: DashboardView(model: model)
                     .environmentObject(L10n.shared)
             )
+            w.delegate = self
+            window = w
         }
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+        // 主面板开着才需要进程列表；关掉就停采，省一次全表遍历
+        model.engine.setWantProcs(true)
+    }
+
+    /// 关窗就把窗口整个放掉，顺便停掉进程采集。
+    ///
+    /// 不缓存窗口是有意的：面板一关，`NSHostingView` 里的图表、表格全都不该
+    /// 继续占内存——这个分支的全部意义就是「不常驻」。
+    func windowWillClose(_ notification: Notification) {
+        model.engine.setWantProcs(false)
+        window = nil
     }
 }
 
