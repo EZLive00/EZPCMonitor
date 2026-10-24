@@ -745,3 +745,45 @@ SwiftPM）、用 UniFFI 之类的绑定生成器、或者手写一层 C ABI。
 
 - 预览窗口开着的时候多约 19MB，关掉就还回去。这是栅格化一整页的代价，和用位图
   差不多，只是换来了缩放清晰和单一渲染路径。
+
+## ADR-025 · 主面板与悬浮窗互斥，菜单栏图标左键开面板
+
+**日期**：2026-10-25 · **状态**：生效
+
+**背景**：主面板和悬浮窗能同时挂在桌面上，显示的还是同一份数据，白占一块地方。而
+菜单栏图标此前只有右键菜单一条路——「点一下图标看看详细情况」这个最直觉的动作不存在。
+
+**决定**：
+
+1. **桌面上最多一个「看数据」的窗口**。开主面板 → 收起悬浮窗；关主面板 → 放回悬浮窗。
+2. **单向**：关悬浮窗只是收起，不弹主面板。点 ✕ 是想让它消失，不是想换个大窗口。
+3. 菜单栏图标**左键**开主面板（已开着就提到前面），**右键 / Control-点**弹菜单。
+4. 托盘菜单第一行是主面板开关（按当前状态写「打开」或「关闭」），第三行是悬浮窗
+   显示 / 隐藏；从菜单开哪个都会把另一个收起来。
+
+**为什么不留状态**：原来的实现记了个 `hiddenByDashboard` 标志，只在「是主面板把它藏起来的」
+时候才恢复。这个标志一旦和实际状态错开（用户在主面板关掉之后又手动关了挂件），下次开面板
+就会把用户明确关掉的东西翻出来。现在改成无状态的 `setDashboardOpen(_:)`：主面板开着就
+`orderOut`，关着就 `show`，谁藏的不重要。
+
+**踩到的坑**：
+
+- **`NSStatusItem.menu` 会吃掉所有点击。** 赋过 `item.menu` 之后左键也被菜单接管，
+  `button.action` 永远收不到。要「左键做事、右键弹菜单」只能让 `item.menu` 保持 nil，
+  自己设 `target/action` + `sendAction(on: [.leftMouseUp, .rightMouseUp])`，右键时
+  手动 `menu.popUp(positioning:at:in:)`。另外 `popUp` 不一定会走 `menuNeedsUpdate`，
+  弹之前得自己刷一次，否则标题和勾是上一次的状态。
+- **程序化 `NSWindow` 默认 `isReleasedWhenClosed = true`，会和 controller 里的
+  `window = nil` 撞成双重释放。** 多出来的那次不在关窗时炸，而是等当前 runloop 回调的
+  自动释放池排空，对着已释放对象再发一次消息——`EXC_BAD_ACCESS`，栈里只有
+  `objc_msgSend ← AutoreleasePoolPage::releaseUntil ← __CFRunLoopPerCalloutARPEnd`，
+  完全看不出是哪个窗口。四个窗口（主面板 / 历史 / 设置 / 报告预览）全部显式置 `false`。
+  设置窗口和悬浮窗原本就置了，所以只有另外三个中招。
+- 托盘「打开主面板」时窗口可能只是被最小化了，`makeKeyAndOrderFront` 不会把它从
+  Dock 里捞出来，得先 `deminiaturize`。
+
+**怎么验的**：屏幕锁着的时候 `screencapture` 全黑、合成的 `CGEvent` 被丢弃，点不动。
+于是临时挂了个 `--selftest`，按用户故事走十四步（开面板 / 关面板 / 菜单开关两个窗口 /
+关历史 / 关报告预览 / 关设置），每步等 1.2 秒读一次窗口状态打日志，跑完删掉。
+左键右键的分支单独抽成纯函数 `StatusItemController.isSecondaryClick(_:)`，
+用合成 `NSEvent` 验四条分支——`NSApp.currentEvent` 是造不出来的，抽出来才测得到。
