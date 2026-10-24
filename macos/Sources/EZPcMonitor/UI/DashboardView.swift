@@ -7,7 +7,7 @@ import SwiftUI
 final class DashboardWindow: NSWindow {
     init(content: some View) {
         super.init(
-            contentRect: NSRect(x: 0, y: 0, width: 960, height: 720),
+            contentRect: NSRect(x: 0, y: 0, width: 960, height: 660),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
@@ -17,7 +17,7 @@ final class DashboardWindow: NSWindow {
         // 塞进 styleMask，内容顶到窗口最上面，红绿灯被盖住——窗口就关不掉了。
         titleVisibility = .hidden
         title = "EZPcMonitor"
-        minSize = NSSize(width: 820, height: 620)
+        minSize = NSSize(width: 820, height: 580)
         contentView = NSHostingView(rootView: AnyView(content))
         center()
         setFrameAutosaveName("ezpcm.dashboard")
