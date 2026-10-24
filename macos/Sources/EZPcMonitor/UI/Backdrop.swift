@@ -1,5 +1,8 @@
 import AppKit
+import CoreImage
+import ImageIO
 import SwiftUI
+import UniformTypeIdentifiers
 
 // MARK: - 模型
 
@@ -8,7 +11,7 @@ enum BackdropKind: String, Codable {
     case material
     /// 纯色（带一点透明度，桌面从底下透出来）。
     case solid
-    /// 用户自选的图片，落盘时压到 1400px，磨砂交给合成时的 `.withinWindow` 材质。
+    /// 用户自选的图片。落盘时压到 1400px 并磨好，存成 `backdrop.jpg`。
     case image
 }
 
@@ -55,7 +58,6 @@ struct Backdrop: Codable, Equatable {
 
 enum BackdropStore {
     /// 用户选的图不会原地引用：原文件被移走或删掉，背景就没了。
-    /// 拷一份到应用数据目录，固定叫 `backdrop.<ext>`，换图时把旧的删掉。
     static var dir: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("dev.ezpc.monitor", isDirectory: true)
@@ -63,10 +65,31 @@ enum BackdropStore {
 
     static func url(for name: String) -> URL { dir.appendingPathComponent(name) }
 
+    /// 落盘尺寸。**磨过的图不需要大**：模糊之后 15px 以上就没有细节了，再大的像素
+    /// 只是把同一片渐变换个分辨率存一遍。实测 1400px 让主面板 footprint 从 31MB 涨到
+    /// 47MB，400px 是 31MB——开销基本和像素数成正比，跟磨砂没关系。
+    ///
+    /// 720px 铺满 1000×768pt 的窗口（2 倍屏 2000px 宽）大约放大 2.8 倍。放大一片
+    /// 已经模糊的渐变，看不出区别。
+    static let maxPixel = 720
+
+    /// 磨砂半径按落盘尺寸给：半径 × (窗口像素 / 落盘像素) 才是屏幕上看到的模糊量。
+    /// 0.02 这个系数让任何一档落盘尺寸的观感一致（720 → 14.4，1400 → 28）。
+    static let blurRatio = 0.02
+
+    /// 导入时就把图磨好，落盘的是**磨过**的 720px JPEG，不是原图。
+    ///
+    /// 为什么不在合成时磨：照片是静止的，磨出来的像素每次都一样，实时的
+    /// `.withinWindow` 材质等于每帧重算一遍同样的结果。不过实测那层材质只占 1MB，
+    /// 真正贵的是图本身——所以真正省下来的不是这层材质，是落盘尺寸。
+    ///
+    /// 为什么落盘而不是每次启动磨：磨一次要几十毫秒、峰值几十 MB，放在启动路径
+    /// 上不划算；写进文件之后启动就是一次缩略图解码。磁盘代价 100KB 上下。
     @discardableResult
     static func importImage(from src: URL) -> String? {
-        let ext = src.pathExtension.isEmpty ? "png" : src.pathExtension.lowercased()
-        let name = "backdrop.\(ext)"
+        guard let cg = thumbnail(src, maxPixel: maxPixel) else { return nil }
+        let blurred = blur(cg, radius: Double(maxPixel) * blurRatio) ?? cg
+        let name = "backdrop.jpg"
         let dst = url(for: name)
         do {
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -76,7 +99,14 @@ enum BackdropStore {
                     try? FileManager.default.removeItem(at: dir.appendingPathComponent(f))
                 }
             }
-            try FileManager.default.copyItem(at: src, to: dst)
+            guard let dest = CGImageDestinationCreateWithURL(
+                dst as CFURL, UTType.jpeg.identifier as CFString, 1, nil
+            ) else { return nil }
+            CGImageDestinationAddImage(
+                dest, blurred,
+                [kCGImageDestinationLossyCompressionQuality: 0.86] as CFDictionary
+            )
+            guard CGImageDestinationFinalize(dest) else { return nil }
             return name
         } catch {
             return nil
@@ -92,26 +122,48 @@ enum BackdropStore {
         }
     }
 
-    /// 读图并缩到 1400px。
+    /// 读图。
     ///
     /// 用 `CGImageSourceCreateThumbnailAtIndex` 而不是 `NSImage(contentsOf:)`：
     /// 后者按原始尺寸整张解码，一张 6000×4000 的照片就是 96MB；缩略图接口只解出
-    /// 目标尺寸，1400px 这一档约 5MB。
-    ///
-    /// 模糊不在这里做：磨砂交给 `BackdropLayer` 里那层 `.withinWindow` 材质，
-    /// 由窗口服务器合成，比预先磨一遍更像系统原生，也不用把 CoreImage 拖进来。
-    static func load(_ name: String, maxPixel: Int = 1400) -> NSImage? {
-        let src = url(for: name)
+    /// 目标尺寸。文件本身已经是 `maxPixel` 这一档了，这里的上限只是兜底——
+    /// 万一有人把一张大图直接塞进应用数据目录。
+    static func load(_ name: String, maxPixel: Int = BackdropStore.maxPixel) -> NSImage? {
+        guard let cg = thumbnail(url(for: name), maxPixel: maxPixel) else { return nil }
+        return NSImage(cgImage: cg, size: .zero)
+    }
+
+    /// 只解出目标尺寸，不解原图。导入和读取共用这一条路径。
+    static func thumbnail(_ src: URL, maxPixel: Int) -> CGImage? {
         guard let source = CGImageSourceCreateWithURL(src as CFURL, nil) else { return nil }
         let opts: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceThumbnailMaxPixelSize: maxPixel,
             kCGImageSourceCreateThumbnailWithTransform: true,
         ]
-        guard let cg = CGImageSourceCreateThumbnailAtIndex(source, 0, opts as CFDictionary) else {
-            return nil
-        }
-        return NSImage(cgImage: cg, size: .zero)
+        return CGImageSourceCreateThumbnailAtIndex(source, 0, opts as CFDictionary)
+    }
+
+    /// 高斯模糊。只在导入时跑一次，所以用不着 CIContext 的缓存和复用。
+    ///
+    /// `clampedToExtent()` 不能省：高斯模糊会把采样窗口伸出图像边界，不先夹住的话
+    /// 结果会比原图小一圈，四周留白边。
+    ///
+    /// 色彩空间必须显式指定 sRGB。CIContext 默认用线性空间做运算，进出各转一次，
+    /// 回来之后饱和度会明显偏高——同一张照片烘完再显示，比直接显示艳一截，
+    /// 卡片直接糊在背景里。原图的 ICC 也会在这一步丢掉，所以写 JPEG 时要带上。
+    static func blur(_ image: CGImage, radius: Double) -> CGImage? {
+        let ci = CIImage(cgImage: image)
+        guard let filter = CIFilter(name: "CIGaussianBlur") else { return nil }
+        filter.setValue(ci.clampedToExtent(), forKey: kCIInputImageKey)
+        filter.setValue(radius, forKey: kCIInputRadiusKey)
+        guard let out = filter.outputImage else { return nil }
+        let space = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
+        let context = CIContext(options: [
+            .workingColorSpace: space,
+            .outputColorSpace: space,
+        ])
+        return context.createCGImage(out, from: ci.extent, format: .RGBA8, colorSpace: space)
     }
 }
 
@@ -119,12 +171,13 @@ enum BackdropStore {
 
 /// 铺在窗口最底下的那一层。放在 SwiftUI 的 `.background` 里，永远不参与命中测试。
 ///
-/// 三种背景都是**真毛玻璃**，只是磨的东西不一样：
-/// - 材质：`behindWindow`，磨的是窗口背后的桌面；
-/// - 纯色：先铺一层 `behindWindow` 材质，再盖一层带透明度的色 —— 就是 macOS 的
+/// 三种背景都是**毛玻璃**，只是磨的东西不一样：
+/// - 材质：`behindWindow`，磨的是窗口背后的桌面，跟着桌面内容实时变；
+/// - 纯色：同一层 `behindWindow` 材质打底，再盖一层带透明度的色 —— 就是 macOS 的
 ///   「着色玻璃」，颜色是染上去的，底下的桌面依然被磨过；
-/// - 图片：`withinWindow`，磨的是窗口**内部**那张图。这是唯一能把用户自己的照片
-///   变成毛玻璃的办法——`behindWindow` 只采样窗口外面，对窗内内容无效。
+/// - 图片：照片在**导入时**就已经磨好了（见 `BackdropStore.importImage`），这里只
+///   负责铺上去、加一层纱。照片是静止的，合成时再磨一遍同样的像素纯属浪费——
+///   实测那层 `.withinWindow` 材质让主面板 footprint 从 31MB 涨到 48MB。
 struct BackdropLayer: View {
     let backdrop: Backdrop
     let image: NSImage?
@@ -170,6 +223,10 @@ struct BackdropLayer: View {
                     Image(nsImage: image)
                         .resizable()
                         .scaledToFill()
+                    // 磨砂已经烘在文件里了，这层材质只负责 macOS 的「活力」观感：
+                    // 压暗、降饱和、加一点系统调的噪点。去掉它照片会艳得卡片都看不见，
+                    // 单靠纱补不回来——纱只能整体压黑，压不出那种去饱和的灰。
+                    // 它只占 1MB 左右（真正贵的是图本身，见 importImage 的注释）。
                     MaterialView(material: .hudWindow, blending: .withinWindow)
                     scrim.opacity(0.75)
                     sheen
@@ -189,8 +246,10 @@ struct BackdropLayer: View {
 /// 只做一件事：铺一块系统材质。跟悬浮窗那个 `WidgetBackground` 的区别是不带拖动、
 /// 不带圆角——主窗口的圆角由窗口自己裁。
 ///
-/// `blending` 决定磨谁：`.behindWindow` 磨窗口背后的桌面，`.withinWindow` 磨
-/// 窗口内部下层的内容（用来把用户选的图片磨成毛玻璃）。
+/// `blending` 决定磨谁：`.behindWindow` 磨窗口背后的桌面，`.withinWindow` 磨窗口
+/// 内部下层的内容。现在三个背景都只用到 `.behindWindow`——图片那条路试过
+/// `.withinWindow`，效果一样但按窗口像素开了十几 MB 的离屏缓冲，换成了导入时
+/// 烘一次。留着这个参数是因为以后真要磨窗内的动态内容（比如视频）还得用它。
 struct MaterialView: NSViewRepresentable {
     var material: NSVisualEffectView.Material = .underWindowBackground
     var blending: NSVisualEffectView.BlendingMode = .behindWindow
