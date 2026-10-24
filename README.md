@@ -54,7 +54,7 @@ CPU 那行不是笔误：1 秒一拍时确实要 5.5%，其中采集内核约 1%
 - **采集频率可调**：高（1 秒）/ 中（5 秒）/ 低（10 秒）三档 + 自定义（0.5–60 秒），托盘菜单和主面板齿轮都能改，改完当拍生效并记住
 - **历史可回溯**：开启后每 10 秒记一条，保留 1 小时到 30 天（或自定义），点「历史」就能看过去六项指标的曲线和峰值。**默认关闭**，写不写盘你说了算
 - **程序榜**：历史窗口里切到「程序」，按进程名合并出 top10 高占用榜，CPU / 内存 / 磁盘三个维度、按平均 / 峰值 / 活跃占比 / 增长任意排序——直接回答「刚才是谁卡的我」
-- **一键报告**：一张 PNG 长图装下结论、六项走势和 Top5 高占用程序，存到下载目录或直接进剪贴板
+- **一键报告**：一张 PNG 长图装下结论、六项走势和 Top5 高占用程序。先预览再决定保存 / 复制 / 取消，点了「报告」不等于往磁盘上写东西
 - **设置窗口**：监控 / 通用 / 外观 / 历史记录 / 关于分组，齿轮和托盘「设置…」进的是同一个地方
 - **深色 / 浅色两套配色**：默认跟随系统，也可以手动固定；`NSColor(name:dynamicProvider:)` 让同一份代码在两种外观下各出一套色，浅色不是「把深色调亮」，是重新配的一版
 - **七种界面语言**：简体中文 / 繁體中文 / English / 日本語 / 한국어 / Français / Español，默认跟随系统语言，设置里随时切换，**不用重启**——托盘菜单和窗口标题跟着一起变
@@ -75,13 +75,18 @@ CPU 那行不是笔误：1 秒一拍时确实要 5.5%，其中采集内核约 1%
 ./macos/build.sh --debug  # 不优化（快，但别拿它量内存和 CPU）
 ```
 
-验收/截图用的三个启动参数，直接拉对应窗口，省得去点菜单栏图标：
+验收/截图用的启动参数，直接拉对应窗口，省得去点菜单栏图标：
 
 ```bash
 ./macos/build/EZPcMonitor.app/Contents/MacOS/EZPcMonitor --dashboard
 ./macos/build/EZPcMonitor.app/Contents/MacOS/EZPcMonitor --history
 ./macos/build/EZPcMonitor.app/Contents/MacOS/EZPcMonitor --settings
+./macos/build/EZPcMonitor.app/Contents/MacOS/EZPcMonitor --history --report       # 开报告预览
+./macos/build/EZPcMonitor.app/Contents/MacOS/EZPcMonitor --history --report-save  # 预览 + 存一张到「下载」
 ```
+
+`--report-save` 单独拆出来是为了量内存：渲一次 2160×2734 的位图会把 footprint 抬高
+二十多兆，顺手写盘会让读数失真。
 
 ## 项目结构
 
@@ -102,7 +107,7 @@ CPU 那行不是笔误：1 秒一拍时确实要 5.5%，其中采集内核约 1%
 │   ├── Sources/EZPcMonitor/
 │   │   ├── App/               Main · AppDelegate · AppModel · 菜单栏
 │   │   ├── Core/              Engine(C ABI 封装) · Models · History · Leaders · L10n
-│   │   └── UI/                悬浮窗 · 主面板 · 背景 · 历史 · 设置 · 磁盘详情 · 报告图 · 组件
+│   │   └── UI/                悬浮窗 · 主面板 · 背景 · 历史 · 设置 · 磁盘详情 · 报告图 · 报告预览 · 组件
 │   ├── i18n/                  七份字典（TS 源码，构建时导出 JSON）
 │   ├── Resources/             Info.plist · AppIcon.icns · strings.json · bin/smartctl
 │   ├── tools/                 extract-strings.mjs（TS → strings.json）
@@ -255,7 +260,7 @@ SMART 直通，这种情况会显示系统给的状态并说明原因，而不�
 
 没有引 i18n 库——只需要查表、插值和单复数。`macos/i18n/zh-CN.ts` 是唯一基准，其余六份的
 类型由它推导，**少翻一条键构建就报错**；构建时导出成 `strings.json`，Swift 侧的 `L10n`
-读这一份（194 条文案 + 8 个单复数键 × 7 种语言），托盘菜单是 `NSMenu` 画的，用的是同一份。
+读这一份（200 条文案 + 8 个单复数键 × 7 种语言），托盘菜单是 `NSMenu` 画的，用的是同一份。
 
 两处例外，都是刻意的：**SMART 属性名**在非中文下用英文（`Percentage Used`、`Available Spare`
 ——smartctl / CrystalDiskInfo 里本来就这么写，硬翻反而对不上号）；**容量单位**统一按
@@ -308,12 +313,22 @@ JSONL（约 600 字节/拍，一天不到 2 MB），所以任何统计口径都�
 ### 一键报告
 
 <p align="center">
+  <img src="docs/screenshots/native-report-preview.jpg" width="620" alt="报告预览">
+</p>
+
+点「报告」先开一个预览窗口，看清了再决定：**保存**（落到下载目录，重名自动加序号，
+不覆盖旧图）、**复制**（进剪贴板，粘到聊天窗口就能发）、或者直接关掉——关掉什么都不留，
+点了「报告」不等于同意往磁盘上写东西。
+
+<p align="center">
   <img src="docs/screenshots/native-report.png" width="420" alt="资源占用报告">
 </p>
 
-点「报告」直接生成一张 PNG 长图（2160 × 2734）：结论条（整机 CPU 峰值 + 最费 CPU 的程序）、
-六项指标走势、Top5 高占用程序，底部带生成时间和采样点数。默认落在下载目录
-（重名自动加序号，不覆盖旧图），旁边的「复制」直接进剪贴板，粘到聊天窗口就能发。
+导出的是一张 2160 × 2734 的长图：结论条（整机 CPU 峰值 + 最费 CPU 的程序）、六项指标走势、
+Top5 高占用程序，底部带生成时间和采样点数。
+
+预览窗口里摆的是**活的 `ReportPage` 视图**，不是位图——位图只在点「保存」或「复制」的
+那一刻才渲，渲完就放掉。窗口拉大之后文字是重新排的，不是把一张图放大。
 
 图用 SwiftUI 的 `ImageRenderer` 离屏渲染。有个坑：位图没有 appearance 概念，
 `Color.primary` 这类动态色在离屏渲染时会被解析成当前外观的颜色，深色主题下可能整张是黑的

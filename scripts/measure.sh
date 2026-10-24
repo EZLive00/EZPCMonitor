@@ -183,7 +183,16 @@ fi
 ROW="| $DATE | \`$SHA\` | ${NOTE:--} | ${APP_MB} MB | ${BIN_MB} MB | ${FP_W} MB | ${RSS_W_MB} MB | ${FP_D} MB | ${CPU_1}% | ${CPU_5}% |"
 # 先取上一次的数据行（只认以日期开头的行，别把表头当成上一次）
 PREV=$(grep -E '^\| [0-9]{4}-' "$PERF" | tail -1 || true)
-echo "$ROW" >> "$PERF"
+
+# 插在**最后一条记录行之后**，而不是文件末尾：表格后面还跟着正文段落
+# （比如「图片背景的尺寸账」），直接 >> 会把新行甩到文末，表格就断了。
+LINE=$(grep -nE '^\| [0-9]{4}-' "$PERF" | tail -1 | cut -d: -f1 || true)
+if [ -n "$LINE" ]; then
+  { head -n "$LINE" "$PERF"; echo "$ROW"; tail -n +"$((LINE + 1))" "$PERF"; } > "$PERF.tmp"
+  mv "$PERF.tmp" "$PERF"
+else
+  echo "$ROW" >> "$PERF"
+fi
 
 echo
 echo "本次：$ROW"
