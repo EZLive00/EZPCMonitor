@@ -1,0 +1,29 @@
+[package]
+name = "ezpcm-core"
+version = "0.1.0"
+edition = "2024"
+description = "EZPcMonitor 采集内核：不依赖任何 UI 框架，通过 C ABI 交给宿主"
+authors = ["wargon"]
+
+[lib]
+name = "ezpcm_core"
+# staticlib 给 Swift 链接；rlib 给本 crate 的测试用
+crate-type = ["staticlib", "rlib"]
+
+[dependencies]
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+sys-locale = "0.3"
+sysinfo = "0.39.6"
+
+[target.'cfg(unix)'.dependencies]
+# 测速时给文件描述符设 F_NOCACHE，否则读的是 page cache，数字虚高
+libc = "0.2"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+# 故意不写 panic = "abort"：C ABI 出口用 catch_unwind 兜 panic，
+# abort 会让这个兜底失效，一次越界访问就能带走整个宿主进程。
+strip = true

@@ -5,6 +5,11 @@ src-tauri/gen/
 .DS_Store
 *.log
 
+# 原生分支：Rust core 与 Swift 的构建产物
+core/target/
+macos/.build/
+macos/build/
+
 # 本地工具状态（agent 记忆、编辑器配置）
 .workbuddy-ai/
 .vscode/
