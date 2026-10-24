@@ -13,12 +13,16 @@ final class AppModel: ObservableObject {
     let engine: CoreEngine
 
     @Published private(set) var snapshot: Snapshot?
-    /// 迷你折线用的滑动窗口，最多 72 点
-    @Published private(set) var series: [Double] = []
-    /// 内存的滑动窗口。主面板的内存卡也要一条线，不能拿 CPU 的糊弄。
-    @Published private(set) var memSeries: [Double] = []
+    /// 折线用的滑动窗口。一个缓冲区喂所有曲线——CPU、内存、网络、GPU
+    /// 各自留一份数组的话，窗口长度迟早会对不齐，图上就会错位。
+    @Published private(set) var samples: [Sample] = []
     @Published private(set) var settings: Settings = .fallback
     @Published private(set) var systemLocale: String = "en"
+
+    /// 硬盘健康。查询要跑 smartctl（几百毫秒到几秒），所以只在主面板打开时拉一次，
+    /// 之后靠「重新检测」按钮手动刷。
+    @Published private(set) var health: [DiskHealth] = []
+    @Published private(set) var healthLoading = false
 
     // 悬浮窗偏好。这些是**纯界面状态**，不像设置那样进 core 的 settings.json——
     // 换个窗口位置不该触发一次「设置已保存」。
@@ -50,6 +54,9 @@ final class AppModel: ObservableObject {
     private let defaults = UserDefaults.standard
     private var timer: Timer?
     private var lastSeq: UInt64 = 0
+    private var healthTimer: Timer?
+    private var healthRetryTimer: Timer?
+    private var healthRetry = 0
 
     private enum Keys {
         static let mode = "ezpcm.mode"
@@ -73,11 +80,8 @@ final class AppModel: ObservableObject {
         L10n.shared.setLanguage(settings.resolvedLanguage(systemLocale: systemLocale))
 
         // 折线从历史里种一批，否则刚启动是一片空白，得等一分钟才有形状
-        let seed = engine.recent().suffix(72)
-        if seed.count > 1 {
-            series = seed.map(\.cpu)
-            memSeries = seed.map(\.mem)
-        }
+        let seed = engine.recent().suffix(Self.window)
+        samples = seed.map(Sample.init)
 
         applyAppearance()
         restartTimer()
@@ -103,13 +107,9 @@ final class AppModel: ObservableObject {
         guard tick.seq != lastSeq else { return }
         lastSeq = tick.seq
         snapshot = tick.snapshot
-        series.append(tick.snapshot.cpu.usage)
-        if series.count > 72 {
-            series.removeFirst(series.count - 72)
-        }
-        memSeries.append(tick.snapshot.mem.percent)
-        if memSeries.count > 72 {
-            memSeries.removeFirst(memSeries.count - 72)
+        samples.append(Sample(tick.snapshot))
+        if samples.count > Self.window {
+            samples.removeFirst(samples.count - Self.window)
         }
     }
 
@@ -150,6 +150,17 @@ final class AppModel: ObservableObject {
 
     // MARK: - 给视图用的派生值
 
+    /// 折线窗口长度。72 点按 1 秒一拍是一分多钟，按 10 秒一拍是十二分钟——
+    /// 够看出「刚才那一下」的形状，又不至于让卡片里的线密到看不出起伏。
+    static let window = 72
+
+    var series: [Double] { samples.map(\.cpu) }
+    var memSeries: [Double] { samples.map(\.mem) }
+    var rxSeries: [Double] { samples.map(\.rx) }
+    var txSeries: [Double] { samples.map(\.tx) }
+    var gpuSeries: [Double] { samples.map(\.gpu) }
+    var diskSeries: [Double] { samples.map(\.disk) }
+
     var cpuPercent: Double { snapshot?.cpu.usage ?? 0 }
     var memPercent: Double { snapshot?.mem.percent ?? 0 }
     var primaryTemp: Double? { snapshot?.primaryTemp }
@@ -157,5 +168,55 @@ final class AppModel: ObservableObject {
 
     var resolvedLanguage: String {
         settings.resolvedLanguage(systemLocale: systemLocale)
+    }
+
+    // MARK: - 硬盘健康
+
+    /// 拉一次健康数据。查询会起进程读 SMART，绝不能占主线程。
+    func refreshHealth(force: Bool = false) {
+        guard !healthLoading else { return }
+        healthLoading = true
+        let engine = self.engine
+        Task { @MainActor in
+            let rows = await Task.detached(priority: .utility) {
+                engine.health(force: force)
+            }.value
+            self.health = rows
+            self.healthLoading = false
+            // 冷启动第一次 smartctl 探测可能刚好超时，core 会给回空表。
+            // 别让用户盯着「未检测到」等五分钟：空结果就短间隔补几次。
+            if rows.isEmpty, !force, self.healthRetry < 3 {
+                self.healthRetry += 1
+                self.healthRetryTimer?.invalidate()
+                self.healthRetryTimer = Timer.scheduledTimer(withTimeInterval: 4, repeats: false) { [weak self] _ in
+                    Task { @MainActor in self?.refreshHealth() }
+                }
+            }
+        }
+    }
+
+    /// 主面板打开时开始轮询，关掉就停——smartctl 是 fork 进程，没必要常驻跑。
+    func startHealthPolling() {
+        healthRetry = 0
+        refreshHealth()
+        healthTimer?.invalidate()
+        let t = Timer(timeInterval: 300, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.refreshHealth() }
+        }
+        RunLoop.main.add(t, forMode: .common)
+        healthTimer = t
+    }
+
+    func stopHealthPolling() {
+        healthTimer?.invalidate()
+        healthTimer = nil
+        healthRetryTimer?.invalidate()
+        healthRetryTimer = nil
+    }
+
+    /// 按挂载点配对。对不上时（例如 APFS 把多个卷合并成一个物理盘）
+    /// 返回 nil，界面显示「未检测到」，而不是拿另一块盘的数字顶上去。
+    func healthRow(for mount: String) -> DiskHealth? {
+        health.first { $0.mount == mount }
     }
 }

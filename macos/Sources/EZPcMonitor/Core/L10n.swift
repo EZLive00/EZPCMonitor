@@ -23,18 +23,6 @@ final class L10n: ObservableObject {
     private var numberFormatters: [String: NumberFormatter] = [:]
     private var clockFormatters: [String: DateFormatter] = [:]
 
-    /// 设置界面里的语言列表。每种语言用**自己的文字**写名字——
-    /// 找不到自己母语的人才最需要翻译。
-    static let choices: [(tag: String, name: String)] = [
-        ("zh-CN", "简体中文"),
-        ("zh-TW", "繁體中文"),
-        ("en", "English"),
-        ("ja", "日本語"),
-        ("ko", "한국어"),
-        ("fr", "Français"),
-        ("es", "Español"),
-    ]
-
     private init() {
         load()
     }
@@ -173,4 +161,27 @@ final class L10n: ObservableObject {
         }
         return f.string(from: Date(timeIntervalSince1970: TimeInterval(ts)))
     }
+}
+
+/// 设置界面里的语言选项。
+///
+/// 每种语言用**自己的文字**写名字——找不到自己母语的人才最需要翻译。
+/// 用结构体而不是元组：`ForEach` 的 `id:` 要一个 `KeyPath`，
+/// 而 Swift 不支持指向元组元素的 key path。
+struct LangChoice: Identifiable {
+    let tag: String
+    let name: String
+    var id: String { tag }
+}
+
+extension L10n {
+    static let choices: [LangChoice] = [
+        LangChoice(tag: "zh-CN", name: "简体中文"),
+        LangChoice(tag: "zh-TW", name: "繁體中文"),
+        LangChoice(tag: "en", name: "English"),
+        LangChoice(tag: "ja", name: "日本語"),
+        LangChoice(tag: "ko", name: "한국어"),
+        LangChoice(tag: "fr", name: "Français"),
+        LangChoice(tag: "es", name: "Español"),
+    ]
 }

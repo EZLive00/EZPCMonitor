@@ -12,6 +12,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     private let item: NSStatusItem
 
     var onOpenDashboard: () -> Void = {}
+    var onOpenHistory: () -> Void = {}
     var onOpenSettings: () -> Void = {}
 
     init(model: AppModel, widget: WidgetController) {
@@ -39,6 +40,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         menu.removeAllItems()
 
         menu.addItem(action(i18n.t("w.openDash"), #selector(openDashboard), key: "d"))
+        menu.addItem(action(i18n.t("hist.title"), #selector(openHistory), key: "r"))
 
         let toggleTitle = widget.isVisible ? i18n.t("w.hide") : i18n.t("w.show")
         menu.addItem(action(toggleTitle, #selector(toggleWidget), key: "h"))
@@ -110,6 +112,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     // MARK: - 动作
 
     @objc private func openDashboard() { onOpenDashboard() }
+    @objc private func openHistory() { onOpenHistory() }
     @objc private func openSettings() { onOpenSettings() }
     @objc private func toggleWidget() { widget.toggle() }
     @objc private func setCard() { model.mode = .card }

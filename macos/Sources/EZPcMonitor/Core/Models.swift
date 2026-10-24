@@ -128,6 +128,52 @@ struct RecentPoint: Decodable {
     let disk: Double
 }
 
+/// 界面自己留的滑动窗口。
+///
+/// 不复用 `RecentPoint`：那个是 core 的返回结构，加一个指标就得动 core；
+/// 也不缓存整个 `Snapshot`——它带着 20 条进程，120 份就是几千个对象，
+/// 而折线只需要六个数字。
+struct Sample {
+    let ts: UInt64
+    let cpu: Double
+    let mem: Double
+    let temp: Double
+    let rx: Double
+    let tx: Double
+    /// 读写合计，首页磁盘卡和悬浮窗用
+    let disk: Double
+    /// 分开的读写，磁盘详情里的两张曲线要
+    let diskRead: Double
+    let diskWrite: Double
+    let gpu: Double
+
+    init(_ p: RecentPoint) {
+        ts = p.ts
+        cpu = p.cpu
+        mem = p.mem
+        temp = p.temp
+        rx = p.rx
+        tx = p.tx
+        disk = p.disk
+        diskRead = 0
+        diskWrite = 0
+        gpu = 0
+    }
+
+    init(_ s: Snapshot) {
+        ts = s.ts
+        cpu = s.cpu.usage
+        mem = s.mem.percent
+        temp = s.primaryTemp ?? 0
+        rx = s.net.rxBps
+        tx = s.net.txBps
+        disk = s.diskTotalBps
+        diskRead = s.diskTotalReadBps
+        diskWrite = s.diskTotalWriteBps
+        gpu = s.gpu?.utilization ?? 0
+    }
+}
+
 /// 落盘的历史点（`history` 方法）。字段名比 `RecentPoint` 短，因为它是文件格式。
 struct HistoryPoint: Decodable, Identifiable {
     let t: UInt64
