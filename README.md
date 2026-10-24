@@ -9,6 +9,10 @@
 </p>
 
 <p align="center">
+  <img src="docs/screenshots/native-widget-bar.png" width="340" alt="紧凑条">
+</p>
+
+<p align="center">
   <img src="docs/screenshots/native-dashboard.png" width="760" alt="主面板">
 </p>
 

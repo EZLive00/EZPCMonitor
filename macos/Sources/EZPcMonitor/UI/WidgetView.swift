@@ -5,7 +5,7 @@ enum WidgetSize {
     // 再加 6pt 余量。用固定高度而不是让 Spacer 去分，是因为 Spacer 分出来的空白
     // 会随内容多少浮动，窗口高度固定时表现成「折线一会儿贴上一会儿贴下」。
     static let card = CGSize(width: 288, height: 178)
-    static let bar = CGSize(width: 320, height: 42)
+    static let bar = CGSize(width: 340, height: 42)
 
     static func of(_ mode: WidgetMode) -> CGSize {
         mode == .card ? card : bar
@@ -187,35 +187,44 @@ struct BarWidget: View {
     private var tx: (value: String, unit: String) { Fmt.splitRate(model.snapshot?.net.txBps ?? 0) }
 
     var body: some View {
+        // 四段不是平分的：CPU / MEM / 温度 各占一个固定宽度，网速吃掉剩下的。
+        // 平分（每段 80pt）时网速只分到 67pt，而「↓ 1.2M ↑ 5.5K」要约 96pt，
+        // 于是逐字换行、变成竖排——这是最早那版的问题。
+        // 固定宽度还有个好处：数值从 9 变到 100 时，三条分隔线不会跟着抖。
         HStack(spacing: 0) {
-            segment {
+            segment(width: 76) {
                 key("CPU")
+                Spacer(minLength: 4)
                 number("\(Int(model.cpuPercent.rounded()))", "%")
             }
             divider
-            segment {
+            segment(width: 76) {
                 key("MEM")
+                Spacer(minLength: 4)
                 number("\(Int(model.memPercent.rounded()))", "%")
             }
             divider
-            segment {
+            segment(width: 52) {
                 HStack(alignment: .firstTextBaseline, spacing: 1) {
                     Text(model.primaryTemp.map { "\(Int($0.rounded()))" } ?? "--")
                         .font(.system(size: 12.5, weight: .semibold, design: .rounded))
                         .monospacedDigit()
                         .foregroundStyle(model.primaryTemp.map(Fmt.tempColor) ?? Color.secondary)
+                        .lineLimit(1).fixedSize()
                     Text("°C").font(.system(size: 8)).foregroundStyle(.secondary)
                 }
             }
             divider
-            segment {
+            flexibleSegment {
                 HStack(spacing: 4) {
                     Text("↓").font(.system(size: 10)).foregroundStyle(Palette.rx)
                     Text(Fmt.compact(model.snapshot?.net.rxBps ?? 0))
                         .font(.system(size: 11, weight: .medium)).monospacedDigit()
+                        .lineLimit(1).fixedSize()
                     Text("↑").font(.system(size: 10)).foregroundStyle(Palette.tx)
                     Text(Fmt.compact(model.snapshot?.net.txBps ?? 0))
                         .font(.system(size: 11, weight: .medium)).monospacedDigit()
+                        .lineLimit(1).fixedSize()
                 }
             }
         }
@@ -240,10 +249,22 @@ struct BarWidget: View {
         }
     }
 
-    private func segment<C: View>(@ViewBuilder _ content: () -> C) -> some View {
-        content()
+    /// 固定宽度的一段。宽度写死是为了让分隔线在数值变化时不动。
+    ///
+    /// 里面的 `HStack` 不能省：`@ViewBuilder` 传进来的是 TupleView，而
+    /// `.frame` 这类修饰符作用在 TupleView 上会**逐个作用到每个子视图**，
+    /// 于是 `key + Spacer + number` 各自被撑成 70pt，整条直接溢出窗口。
+    private func segment<C: View>(width: CGFloat, @ViewBuilder _ content: () -> C) -> some View {
+        HStack(spacing: 0) { content() }
+            .padding(.horizontal, 8)
+            .frame(width: width)
+    }
+
+    /// 吃掉剩余宽度的一段（网速）。
+    private func flexibleSegment<C: View>(@ViewBuilder _ content: () -> C) -> some View {
+        HStack(spacing: 0) { content() }
+            .padding(.horizontal, 8)
             .frame(maxWidth: .infinity)
-            .padding(.horizontal, 6)
     }
 
     private var divider: some View {
@@ -264,7 +285,9 @@ struct BarWidget: View {
             Text(v)
                 .font(.system(size: 12.5, weight: .semibold, design: .rounded))
                 .monospacedDigit()
-            Text(unit).font(.system(size: 8)).foregroundStyle(.secondary)
+                .lineLimit(1)
+                .fixedSize()
+            Text(unit).font(.system(size: 8)).foregroundStyle(.secondary).lineLimit(1)
         }
     }
 }
