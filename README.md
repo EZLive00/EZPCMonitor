@@ -288,6 +288,10 @@ SMART 直通，这种情况会显示系统给的状态并说明原因，而不�
 色和磨砂桌面本来就同亮，最后整根滑杆拉到底只差 2.4/255——用户反馈过「调节看起来失效
 了，只能改变一点点亮度」。来龙去脉在 [ADR-029](docs/DECISIONS.md)。
 
+<p align="center">
+  <img src="docs/screenshots/native-opacity-range.jpg" width="900" alt="不透明度 35% / 68% / 100%">
+</p>
+
 背景存在 UserDefaults 而不是 `settings.json`——它只影响一个窗口怎么画，内核不需要知道。
 
 
