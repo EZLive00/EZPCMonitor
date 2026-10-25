@@ -257,7 +257,7 @@ struct SettingsView: View {
                                 model.backdrop = next
                             }
                         ),
-                        in: 0.6...1
+                        in: Backdrop.opacityRange
                     )
                     .frame(width: 190)
                     // 系统材质的不透明度由系统控制，这个滑杆对它没意义
