@@ -68,7 +68,7 @@ struct ProcLeadersView: View {
 
             Text(loading ? i18n.t("common.reading") : i18n.t("hist.procTotal", ["n": i18n.num(Double(data.total))]))
                 .font(.system(size: 10))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(Ink.tertiary)
                 .lineLimit(1)
         }
     }
@@ -119,7 +119,7 @@ struct ProcLeadersView: View {
             }
         }
         .font(.system(size: 9.5, weight: .semibold))
-        .foregroundStyle(.tertiary)
+        .foregroundStyle(Ink.tertiary)
         .padding(.vertical, 5)
         .padding(.horizontal, 4)
     }
@@ -142,7 +142,7 @@ struct ProcLeadersView: View {
         return HStack(spacing: 8) {
             Text("\(rank)")
                 .font(.system(size: 10, design: .monospaced))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(Ink.tertiary)
                 .frame(width: 22, alignment: .leading)
 
             Text(r.name)
@@ -193,7 +193,7 @@ struct ProcLeadersView: View {
             Text(text)
                 .font(.system(size: 10.5, design: .monospaced))
                 .monospacedDigit()
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Ink.secondary)
                 .frame(maxWidth: .infinity, alignment: .trailing)
                 .helpIf(c == .peak,
                         i18n.t("hist.peakAt", [

@@ -199,7 +199,7 @@ struct ReportPreviewView: View {
         } else {
             Text(i18n.t("rep.hint"))
                 .font(.system(size: 10.5))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(Ink.tertiary)
                 .lineLimit(1)
         }
     }

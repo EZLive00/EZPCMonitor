@@ -22,11 +22,14 @@ struct CardBox<Content: View>: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color.primary.opacity(0.035))
+                    // 3.5% 在半透明窗口上几乎看不见——卡片和底色会糊成一片，
+                    // 「哪里是卡片」全靠留白猜。5.5% + 9% 描边才分得出来，
+                    // 又不至于变成一块块实心板。
+                    .fill(Color.primary.opacity(0.055))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .strokeBorder(Color.primary.opacity(0.055), lineWidth: 1)
+                    .strokeBorder(Color.primary.opacity(0.09), lineWidth: 1)
             )
     }
 }
@@ -45,7 +48,7 @@ struct CardHeader<Trailing: View>: View {
         HStack(spacing: 8) {
             Text(title)
                 .font(.system(size: 10.5, weight: .semibold))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Ink.secondary)
             Spacer(minLength: 4)
             trailing
         }
@@ -61,7 +64,7 @@ extension CardHeader where Trailing == EmptyView {
 /// 小灰标签：`10 核`、`3 个传感器`、`TOP 20`。
 struct Tag: View {
     let text: String
-    var color: Color = .secondary
+    var color: Color = Ink.secondary
 
     var body: some View {
         Text(text)
@@ -87,7 +90,7 @@ struct KVRow: View {
         HStack(spacing: 6) {
             Text(key)
                 .font(.system(size: 10.5))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Ink.secondary)
             Spacer(minLength: 4)
             Text(value)
                 .font(.system(size: 10.5, weight: .semibold))
@@ -290,7 +293,7 @@ struct TrendChart: View {
                 } else {
                     Text("—")
                         .font(.system(size: 11))
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(Ink.tertiary)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
@@ -302,7 +305,7 @@ struct TrendChart: View {
                         Text(t)
                             .font(.system(size: 9))
                             .monospacedDigit()
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(Ink.tertiary)
                         if i < times.count - 1 { Spacer() }
                     }
                 }
@@ -350,7 +353,7 @@ struct CoreBars: View {
                             Text("\(Int(v.rounded()))")
                                 .font(.system(size: 7.5))
                                 .monospacedDigit()
-                                .foregroundStyle(.tertiary)
+                                .foregroundStyle(Ink.tertiary)
                         }
                     }
                     .frame(width: w)
@@ -395,11 +398,11 @@ struct DiskStatusChip: View {
             Circle().fill(color).frame(width: 5, height: 5)
             Text(label).foregroundStyle(color)
             if let used = health.lifeUsed {
-                Text("·").foregroundStyle(.tertiary)
+                Text("·").foregroundStyle(Ink.tertiary)
                 Text(i18n.t("ds.wear", ["v": "\(Int(used.rounded()))"]))
             }
             if let t = health.temperature {
-                Text("·").foregroundStyle(.tertiary)
+                Text("·").foregroundStyle(Ink.tertiary)
                 Text("\(Int(t.rounded()))°C")
             }
         }
@@ -434,7 +437,7 @@ struct StatTile: View {
             }
             Text(note)
                 .font(.system(size: 9.5))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(Ink.tertiary)
                 .lineLimit(1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)

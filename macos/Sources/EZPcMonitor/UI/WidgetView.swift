@@ -135,7 +135,7 @@ struct CardWidget: View {
                 Text("DISK")
                     .font(.system(size: 9, weight: .bold))
                     .tracking(0.5)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(Ink.tertiary)
                 Text("\(Int(model.mainDiskPercent.rounded()))%")
                     .font(.system(size: 10.5, weight: .semibold))
                     .monospacedDigit()
@@ -277,7 +277,7 @@ struct BarWidget: View {
         Text(s)
             .font(.system(size: 8, weight: .bold))
             .tracking(0.5)
-            .foregroundStyle(.tertiary)
+            .foregroundStyle(Ink.tertiary)
     }
 
     private func number(_ v: String, _ unit: String) -> some View {

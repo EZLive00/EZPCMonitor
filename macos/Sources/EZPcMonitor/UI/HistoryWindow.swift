@@ -205,7 +205,7 @@ struct HistoryView: View {
             if view == 0 {
                 Text(loading ? i18n.t("common.reading") : i18n.tn("p.points", Double(rows.count)))
                     .font(.system(size: 10))
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(Ink.tertiary)
             }
         }
     }
@@ -271,7 +271,7 @@ struct HistoryView: View {
                     Text("· \(i18n.t("hist.avg")) \(m.format(s.avg))")
                         .font(.system(size: 9.5))
                         .monospacedDigit()
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(Ink.tertiary)
                 }
 
                 TrendChart(
@@ -297,7 +297,7 @@ struct HistoryView: View {
                  ? i18n.t("hist.foot", ["n": "\(stats?.sampleSecs ?? 10)"])
                  : i18n.t("hist.procFoot", ["n": "\(stats?.procSampleSecs ?? 30)"]))
                 .font(.system(size: 9.5))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(Ink.tertiary)
             Spacer()
         }
         .padding(.top, 8)

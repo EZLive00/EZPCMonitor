@@ -137,7 +137,7 @@ struct SettingsView: View {
             Hairline()
             Text(i18n.t("set.foot"))
                 .font(.system(size: 9.5))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(Ink.tertiary)
                 .padding(.top, 8)
         }
         .padding(.horizontal, 18)
@@ -266,7 +266,7 @@ struct SettingsView: View {
 
                     Text("\(Int((model.backdrop.opacity * 100).rounded()))%")
                         .font(.system(size: 10.5)).monospacedDigit()
-                        .foregroundStyle(model.backdrop.kind == .material ? .tertiary : .secondary)
+                        .foregroundStyle(model.backdrop.kind == .material ? Ink.tertiary : Ink.secondary)
                         .frame(width: 34, alignment: .leading)
                     Spacer()
                 }
@@ -542,7 +542,7 @@ struct SettingsView: View {
                     "n": "\(sampleSecs)",
                 ]))
                 .font(.system(size: 9.5))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(Ink.tertiary)
             }
         }
     }
@@ -559,7 +559,7 @@ struct SettingsView: View {
                     .font(.system(size: 11, weight: on ? .semibold : .regular))
                 Text(estimate(secs))
                     .font(.system(size: 9))
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(Ink.tertiary)
             }
             .padding(.horizontal, 9)
             .padding(.vertical, 5)
@@ -585,7 +585,7 @@ struct SettingsView: View {
                     Text("v\(version)")
                         .font(.system(size: 11))
                         .monospacedDigit()
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(Ink.tertiary)
                 }
             }
         }
@@ -656,7 +656,7 @@ struct SettingsView: View {
                 Text(title)
                     .font(.system(size: 10, weight: .semibold))
                     .tracking(0.6)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(Ink.tertiary)
                 trailing()
                 Spacer()
             }
@@ -683,7 +683,7 @@ struct SettingsView: View {
                     .font(.system(size: 11.5))
                 Text(hint)
                     .font(.system(size: 9.5))
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(Ink.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .frame(width: 168, alignment: .leading)

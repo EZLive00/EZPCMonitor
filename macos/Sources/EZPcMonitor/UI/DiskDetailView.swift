@@ -263,7 +263,7 @@ struct DiskDetailView: View {
                         .frame(width: 210, alignment: .leading)
                 }
                 .font(.system(size: 9.5, weight: .semibold))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(Ink.tertiary)
                 .padding(.vertical, 4)
 
                 Hairline()
@@ -347,7 +347,7 @@ struct DiskDetailView: View {
             Spacer()
         }
         .font(.system(size: 9.5))
-        .foregroundStyle(.tertiary)
+        .foregroundStyle(Ink.tertiary)
         .lineLimit(1)
         .padding(.top, 10)
     }

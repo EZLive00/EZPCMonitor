@@ -47,6 +47,35 @@ enum Palette {
     static let danger = dyn(0xf87171, 0xdc2626)
 }
 
+// MARK: - 文字色
+
+/// 文字用的透明度阶梯。
+///
+/// 不用系统的 `.secondary`（深色下是白 55%）：主面板是**半透明**窗口，底色来自
+/// 磨砂玻璃后面的桌面，明度不可控。白 55% 压在常见的浅色壁纸上，实测对比度只有
+/// **3.1~3.4:1**，10.5pt 的卡片标题和 9.5pt 的表头读起来发虚——WCAG 对小字的要求
+/// 是 4.5:1。
+///
+/// 这里把次要文字抬到 72%，同时把窗口底色压暗一档（见 `BackdropLayer` 的 scrim），
+/// 两头一起使劲才够：只提亮文字的话，白字在浅底上还是会糊成一片。
+enum Ink {
+    static func level(_ dark: Double, _ light: Double) -> Color {
+        Color(nsColor: NSColor(name: nil) { appearance in
+            let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            return isDark
+                ? NSColor.white.withAlphaComponent(dark)
+                : NSColor.black.withAlphaComponent(light)
+        })
+    }
+
+    /// 次要文字：卡片标题、键名、表头、单位。
+    static let secondary = level(0.72, 0.62)
+
+    /// 更弱的一档：只用在不需要细读的地方（`DOWN`/`UP` 这类列标签、分隔点）。
+    /// 系统 `.tertiary` 是白 25%，压在这种底色上只有 1.5:1——等于没画。
+    static let tertiary = level(0.55, 0.46)
+}
+
 // MARK: - 格式化
 //
 // 跟 `src/lib/format.ts` 逐条对齐。这些数字会同时出现在悬浮窗和主面板里，

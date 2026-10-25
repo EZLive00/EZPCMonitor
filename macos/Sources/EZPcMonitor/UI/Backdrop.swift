@@ -207,22 +207,45 @@ struct BackdropLayer: View {
         )
     }
 
+    /// 玻璃上的压暗层，**保证可读性的兜底**。
+    ///
+    /// 背景走的是 `.behindWindow`，透的是桌面——壁纸亮一点，整个窗口就跟着发白，
+    /// 白 55% 的次要文字直接掉到 3:1 以下（这台机器上实测 3.14:1，WCAG 对小字要求
+    /// 4.5:1）。压一档把底色拉到可预期的范围：桌面照样透得过来，只是不再由壁纸的
+    /// 明暗决定可读性。
+    ///
+    /// 比图片那档（0.52）轻得多：照片有自己的明暗和饱和度，材质本身就是系统调过的。
+    private var glassScrim: Color {
+        Color(nsColor: NSColor(name: nil) { appearance in
+            let dark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            return dark
+                ? NSColor.black.withAlphaComponent(0.26)
+                : NSColor.white.withAlphaComponent(0.18)
+        })
+    }
+
     var body: some View {
         ZStack {
             switch backdrop.kind {
             case .material:
                 MaterialView()
+                glassScrim
             case .solid:
                 MaterialView()
                 // 玻璃打底 + 染色。0.40~0.85 之间跟着滑杆走：最低那档还能看清
                 // 桌面在动，最高那档基本就是一块带磨砂的实色。
                 backdrop.preset.color.opacity(0.40 + 0.45 * backdrop.opacity)
+                glassScrim
                 sheen
             case .image:
                 if let image {
                     Image(nsImage: image)
                         .resizable()
                         .scaledToFill()
+                        // 照片的强度跟着滑杆走：压下去是「照片淡进材质里」。
+                        // 以前是把**整层背景**降透明度，那等于让窗口本身变透明，
+                        // 透上来的是未经处理的桌面，文字立刻发虚。
+                        .opacity(0.55 + 0.45 * backdrop.opacity)
                     // 磨砂已经烘在文件里了，这层材质只负责 macOS 的「活力」观感：
                     // 压暗、降饱和、加一点系统调的噪点。去掉它照片会艳得卡片都看不见，
                     // 单靠纱补不回来——纱只能整体压黑，压不出那种去饱和的灰。
@@ -233,10 +256,14 @@ struct BackdropLayer: View {
                 } else {
                     // 图片文件被删了/格式不认：退回材质，总比一片黑好
                     MaterialView()
+                    glassScrim
                 }
             }
         }
-        .opacity(backdrop.kind == .material ? 1 : backdrop.opacity)
+        // 这里**不再**乘 `backdrop.opacity`。窗口是 isOpaque = false，整层降透明度
+        // 会让窗口本身变成「半透明塑料膜」，底下透出来的是没磨过、没压过的桌面——
+        // 滑杆拉到 70% 就等于给整窗垫了 30% 的生壁纸，白字压上去只有 3:1 出头。
+        // 「桌面透过来」这件事由材质本身负责（它磨的就是桌面），滑杆只管染色浓淡。
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .clipped()
         .allowsHitTesting(false)

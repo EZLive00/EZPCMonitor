@@ -119,6 +119,35 @@ private struct DiskViewportBottomKey: PreferenceKey {
     }
 }
 
+/// 读出窗口标题栏的高度（内容视图的安全区顶部内边距）。
+///
+/// 背景要铺满整个窗口（含标题栏那 28pt），这就要求 `.ignoresSafeArea()` 加在
+/// **最外层**；可一旦忽略安全区，SwiftUI 里就再也读不到 `safeAreaInsets` 了，
+/// 而内容又不能真的顶到红绿灯底下。所以只能绕到 AppKit 那边问一句：
+/// `contentView.safeAreaInsets.top` 是窗口自己的属性，不受 SwiftUI 忽略安全区影响。
+///
+/// 不写死 28 是因为全屏时它会变成 0，写死的话全屏下顶部会多出一条空白。
+private struct TitleBarInsetReader: NSViewRepresentable {
+    @Binding var inset: CGFloat
+
+    func makeNSView(context: Context) -> NSView {
+        let v = NSView(frame: .zero)
+        DispatchQueue.main.async { read(v) }
+        return v
+    }
+
+    func updateNSView(_ v: NSView, context: Context) {
+        DispatchQueue.main.async { read(v) }
+    }
+
+    private func read(_ v: NSView) {
+        let top = v.window?.contentView?.safeAreaInsets.top ?? 0
+        // 差值判断是必需的：写回 inset 会再触发一次 updateNSView，
+        // 不设阈值就是无限循环。
+        if abs(top - inset) > 0.5 { inset = top }
+    }
+}
+
 struct DashboardView: View {
     @ObservedObject var model: AppModel
     @EnvironmentObject private var i18n: L10n
@@ -128,6 +157,9 @@ struct DashboardView: View {
 
     @State private var detail: Disk?
     @State private var procSort: ProcSort = .cpu
+
+    /// 标题栏高度。初值给标准值，探针量到真实值后会覆盖（见 TitleBarInsetReader）。
+    @State private var titleBarInset: CGFloat = 28
 
     /// 磁盘列表的滚动位置。两个 global 底边相减就知道下面还有没有东西，
     /// 不用具名坐标空间（`coordinateSpace(name:)` 在 macOS 14 已经换了写法）。
@@ -148,25 +180,29 @@ struct DashboardView: View {
                 Spacer()
                 Text(i18n.t("dash.connecting"))
                     .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Ink.secondary)
                     .frame(maxWidth: .infinity)
                 Spacer()
             }
         }
         .padding(.horizontal, 18)
-        .padding(.top, 14)
+        // 标题栏那 28pt 由 ignoresSafeArea 交给背景了，内容自己补回来
+        .padding(.top, 14 + titleBarInset)
         .padding(.bottom, 16)
         .frame(minWidth: 880, minHeight: 660)
-        // 背景铺满整个窗口（含标题栏那 28pt），所以必须 ignoresSafeArea——
-        // 否则红绿灯那条会露成窗口底色，接缝比原来那条分隔线还难看。
         .background {
             BackdropLayer(backdrop: model.backdrop, image: model.backdropImage)
-                .ignoresSafeArea()
+                .background(TitleBarInsetReader(inset: $titleBarInset))
+                // 圆角裁在背景自己身上。窗口一旦设成 isOpaque = false，系统就不再
+                // 替我们切圆角了（不透明窗口的圆角是窗口自己画的），只能自己裁。
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         }
-        // 窗口一旦设成 isOpaque = false，系统就不再替我们切圆角了（不透明窗口的
-        // 圆角是窗口自己画的）。内容铺满整个窗口之后，只能自己裁——10pt 是
-        // Big Sur 之后标准窗口的圆角半径。
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        // **必须加在最外层**。放进 `.background` 里是没用的——试过
+        // `.background { Color.red.ignoresSafeArea() }`，红也一样被截在标题栏
+        // 下面：`.background` 的内容拿到的安全区是「内容视图的」，已经扣掉了
+        // 标题栏，没有可扩展的空间。加在根上，整个视图（含背景）才真正铺满
+        // 整窗，红绿灯那条才不会透出桌面。
+        .ignoresSafeArea()
         .sheet(item: $detail) { d in
             DiskDetailView(
                 disk: d,
@@ -190,7 +226,7 @@ struct DashboardView: View {
                     .lineLimit(1)
                 Text(subtitle)
                     .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Ink.secondary)
                     .lineLimit(1)
             }
 
@@ -200,17 +236,17 @@ struct DashboardView: View {
                 VStack(alignment: .trailing, spacing: 2) {
                     Text(snap.cpu.brand.isEmpty ? i18n.t("dash.cpuUnknown") : snap.cpu.brand)
                         .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Ink.secondary)
                         .lineLimit(1)
                     Text(cpuDetail(snap))
                         .font(.system(size: 10.5))
                         .monospacedDigit()
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(Ink.tertiary)
                         .lineLimit(1)
                     Text(i18n.t("dash.load", ["v": snap.load.map { String(format: "%.2f", $0) }.joined(separator: "  ")]))
                         .font(.system(size: 10.5))
                         .monospacedDigit()
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(Ink.tertiary)
                         .lineLimit(1)
                 }
             }
@@ -220,7 +256,7 @@ struct DashboardView: View {
                 Button(action: onOpenSettings) {
                     Image(systemName: "slider.horizontal.3")
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Ink.secondary)
                         .frame(width: 26, height: 22)
                         .background(
                             RoundedRectangle(cornerRadius: 6, style: .continuous)
@@ -300,7 +336,7 @@ struct DashboardView: View {
                         .foregroundStyle(Palette.cpu)
                     Text("%")
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Ink.secondary)
                 }
                 .padding(.top, 4)
 
@@ -372,10 +408,10 @@ struct DashboardView: View {
                     Text(primary.map { "\(Int($0.value.rounded()))" } ?? "--")
                         .font(.system(size: 30, weight: .semibold, design: .rounded))
                         .monospacedDigit()
-                        .foregroundStyle(primary.map { Fmt.tempColor($0.value) } ?? Color.secondary)
+                        .foregroundStyle(primary.map { Fmt.tempColor($0.value) } ?? Ink.secondary)
                     Text("°C")
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Ink.secondary)
                 }
                 .padding(.top, 4)
 
@@ -386,7 +422,7 @@ struct DashboardView: View {
                         HStack(spacing: 8) {
                             Text(t.label)
                                 .font(.system(size: 10))
-                                .foregroundStyle(t.primary ? Color.primary : Color.secondary)
+                                .foregroundStyle(t.primary ? Color.primary : Ink.secondary)
                                 .lineLimit(1)
                                 .truncationMode(.middle)
                                 .frame(width: 104, alignment: .leading)
@@ -400,14 +436,14 @@ struct DashboardView: View {
                             Text("\(Int(t.value.rounded()))°")
                                 .font(.system(size: 10))
                                 .monospacedDigit()
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(Ink.secondary)
                                 .frame(width: 30, alignment: .trailing)
                         }
                     }
                     if snap.temps.isEmpty {
                         Text(i18n.t("dash.noTemp"))
                             .font(.system(size: 11))
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(Ink.tertiary)
                     }
                 }
             }
@@ -431,7 +467,7 @@ struct DashboardView: View {
                             .foregroundStyle(Palette.gpu)
                         Text("%")
                             .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Ink.secondary)
                     }
                     .padding(.top, 4)
 
@@ -456,10 +492,10 @@ struct DashboardView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(i18n.t("dash.gpuNone"))
                             .font(.system(size: 11.5, weight: .medium))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Ink.secondary)
                         Text(i18n.t("dash.gpuPlan"))
                             .font(.system(size: 10))
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(Ink.tertiary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer(minLength: 0)
@@ -493,7 +529,7 @@ struct DashboardView: View {
                     }
                     .font(.system(size: 9.5))
                     .monospacedDigit()
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Ink.secondary)
                     .lineLimit(1)
                 }
 
@@ -559,13 +595,13 @@ struct DashboardView: View {
                         .lineLimit(1)
                     Text(d.mount)
                         .font(.system(size: 9.5))
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(Ink.tertiary)
                         .lineLimit(1)
                     Spacer(minLength: 4)
                     Text("R \(Fmt.rate(d.readBps)) · W \(Fmt.rate(d.writeBps))")
                         .font(.system(size: 9.5))
                         .monospacedDigit()
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Ink.secondary)
                         .lineLimit(1)
                 }
 
@@ -580,7 +616,7 @@ struct DashboardView: View {
                     Text("\(Fmt.bytes(Double(d.used))) / \(Fmt.bytes(Double(d.total), digits: 0))")
                         .font(.system(size: 9.5))
                         .monospacedDigit()
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Ink.secondary)
                         .lineLimit(1)
                         .frame(width: 112, alignment: .trailing)
                 }
@@ -591,7 +627,7 @@ struct DashboardView: View {
                     } else {
                         Text(model.healthLoading ? i18n.t("dash.diskLoading") : i18n.t("dash.diskNoHealth"))
                             .font(.system(size: 10))
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(Ink.tertiary)
                     }
                     Spacer(minLength: 4)
                     Text(i18n.t("dash.diskMore"))
@@ -646,7 +682,7 @@ struct DashboardView: View {
             Text(label)
                 .font(.system(size: 9, weight: .semibold))
                 .tracking(0.8)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(Ink.tertiary)
             HStack(alignment: .firstTextBaseline, spacing: 2) {
                 Text(v.value)
                     .font(.system(size: 22, weight: .semibold, design: .rounded))
@@ -654,7 +690,7 @@ struct DashboardView: View {
                     .foregroundStyle(color)
                 Text(v.unit.isEmpty ? "/s" : "\(v.unit)/s")
                     .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Ink.secondary)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -693,7 +729,7 @@ struct DashboardView: View {
                         .frame(width: 84, alignment: .trailing)
                 }
                 .font(.system(size: 9.5, weight: .semibold))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(Ink.tertiary)
                 .padding(.top, 8)
                 .padding(.horizontal, 4)
 
@@ -702,7 +738,7 @@ struct DashboardView: View {
                 if rows.isEmpty {
                     Text(i18n.t("dash.collecting"))
                         .font(.system(size: 11))
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(Ink.tertiary)
                         .padding(.top, 10)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 } else {
@@ -730,7 +766,7 @@ struct DashboardView: View {
         HStack(spacing: 8) {
             Text("\(p.pid)")
                 .font(.system(size: 10.5, design: .monospaced))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(Ink.tertiary)
                 .frame(width: 54, alignment: .leading)
             Text(p.name)
                 .font(.system(size: 11))
@@ -745,7 +781,7 @@ struct DashboardView: View {
             Text(Fmt.bytes(Double(p.mem), digits: 0))
                 .font(.system(size: 10.5, design: .monospaced))
                 .monospacedDigit()
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Ink.secondary)
                 .frame(width: 84, alignment: .trailing)
         }
         .padding(.horizontal, 4)
