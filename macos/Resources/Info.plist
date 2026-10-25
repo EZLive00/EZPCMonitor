@@ -22,9 +22,10 @@
 	<string>AppIcon</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>13.0</string>
-	<!-- 常驻菜单栏：不进 Dock、不抢 ⌘Tab -->
-	<key>LSUIElement</key>
-	<true/>
+	<!-- 这里**不设** LSUIElement：早先按纯菜单栏工具做（不占 Dock、不进 ⌘Tab），
+	     但那样在 Dock 和 ⌘Tab 里完全找不到这个程序，关掉窗口后想再打开只能去
+	     点菜单栏那个小图标。现在按普通应用走，Dock 里点一下就开主面板
+	     （AppDelegate.applicationShouldHandleReopen）。 -->
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSHumanReadableCopyright</key>

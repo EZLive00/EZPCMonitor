@@ -10,6 +10,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var settings: SettingsController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Dock 图标。Info.plist 里已经不设 LSUIElement 了，但 LaunchServices 会
+        // 把「这个 bundle id 是 UIElement」缓存住——改完 plist 重新构建、重开
+        // 进程，它还是按旧记录跑（`lsappinfo info -only ApplicationType` 一直报
+        // UIElement，Dock 里也就一直不出现）。显式设一次，行为不依赖那份缓存。
+        // **改这里之前先看 Info.plist**：两处必须一致。
+        NSApp.setActivationPolicy(.regular)
+
         guard let engine = makeEngine() else {
             let alert = NSAlert()
             alert.messageText = "EZPcMonitor"
@@ -53,6 +60,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// 关掉主面板不该退出程序——这是个常驻的菜单栏工具。
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
+
+    /// 点 Dock 图标＝「我要看数据」。
+    ///
+    /// 默认实现是「有窗口就提到前面、没窗口就什么都不做」，而本程序平时唯一的窗口
+    /// 是被收起来的悬浮窗，所以默认行为看起来就像点了没反应。这里统一开主面板：
+    /// 已经开着就 `show()` 把它提上来（顺带从最小化里捞出来）。
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        openDashboard()
+        return true
+    }
 
     // MARK: - 路径
 

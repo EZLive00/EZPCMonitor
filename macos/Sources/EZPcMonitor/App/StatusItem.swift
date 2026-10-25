@@ -26,9 +26,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         super.init()
 
         if let button = item.button {
-            let image = NSImage(systemSymbolName: "gauge", accessibilityDescription: "EZPcMonitor")
-            image?.isTemplate = true
-            button.image = image
+            button.image = Self.trayImage()
             button.toolTip = "EZPcMonitor"
             // 左键开主面板，右键才弹菜单。
             //
@@ -45,6 +43,24 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     }
 
     private var i18n: L10n { L10n.shared }
+
+    /// 菜单栏图标：App 图标里那条心电折线，抠成模板图。
+    ///
+    /// 模板图（`isTemplate = true`）AppKit 只看 alpha，按菜单栏当前颜色重新着色，
+    /// 所以深色栏上是白的、浅色栏上是黑的，不用备两套图。图由
+    /// `scripts/gen_tray_icon.py` 生成，1x/2x/3x 三档由 `NSImage(named:)` 自己挑。
+    ///
+    /// 回落用 `gauge` 符号：资源没打进包时（比如只跑单文件调试）至少还有个图标，
+    /// 不至于在菜单栏里留下一个看不见但能点的空白区。
+    static func trayImage() -> NSImage? {
+        if let image = NSImage(named: "tray-template") {
+            image.isTemplate = true
+            return image
+        }
+        let fallback = NSImage(systemSymbolName: "gauge", accessibilityDescription: "EZPcMonitor")
+        fallback?.isTemplate = true
+        return fallback
+    }
 
     /// 这一次点击算不算「次要点击」（右键 / Control-点）。
     ///

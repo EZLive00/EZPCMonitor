@@ -80,6 +80,9 @@ echo "==> 4/4 组装 .app"
 cp "$MAC/Resources/Info.plist" "$APP/Contents/Info.plist"
 cp "$MAC/Resources/strings.json" "$APP/Contents/Resources/strings.json"
 cp "$MAC/Resources/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
+# 菜单栏模板图（1x/2x/3x 三档，NSImage(named:) 会自己挑）。由
+# scripts/gen_tray_icon.py 从 app-icon.png 的折线几何生成，别手改。
+cp "$MAC"/Resources/tray-template*.png "$APP/Contents/Resources/"
 # 硬盘 SMART 要它；没有就回落系统装的那份（brew install smartmontools）。
 # 从 macos/Resources 里拿，不再去 src-tauri 借——原生版的构建不该依赖
 # 已经废弃的 WebView 目录，否则那一半就永远删不掉。
