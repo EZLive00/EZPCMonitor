@@ -31,14 +31,14 @@ struct Backdrop: Codable, Equatable {
     var color: String = Backdrop.colors[0].id
     /// 图片文件名（存在应用数据目录里，不是用户选的那个原始路径）
     var image: String?
-    /// 背景层的浓度。**1.0 就是 1.0**：染色/照片的 alpha 直接等于它，
-    /// 100% 时桌面完全盖住，35% 时桌面明显透过来。
+    /// 背景层的不透明度。**1.0 就是 1.0**：整层完全不透明，桌面彻底盖住。
     /// 只作用在背景层，正文和卡片永远不透明——文字半透明就没法看了。
     var opacity: Double = 0.94
 
-    /// 滑杆的下限。**不要再压**：再低就轮到玻璃上那层纱兜不住了，
-    /// 深色主题 + 纯白壁纸时白字会掉到 4.5:1 以下（见 `BackdropLayer.tintScrim`）。
-    static let opacityRange: ClosedRange<Double> = 0.35...1
+    /// 滑杆的下限。**别再往下压**：0.6 是「桌面明显透过来」这一档，再低后面透上来的
+    /// 就是清晰的桌面内容（磨砂只占 alpha 那部分），和卡片上的文字会糊成一片。
+    /// 0.6 这个数也是老版本滑杆的下限，用户对「最透明」的预期就在这儿。
+    static let opacityRange: ClosedRange<Double> = 0.6...1
 
     var preset: BackdropColor {
         Self.colors.first { $0.id == color } ?? Self.colors[0]
@@ -187,137 +187,118 @@ struct BackdropLayer: View {
     let backdrop: Backdrop
     let image: NSImage?
 
-    /// 照片上的压暗/提亮层。文字颜色跟着主题走，所以压的方向也得跟着走：
-    /// 深色主题压黑，浅色主题提白，否则「深色主题 + 亮色照片」就是白字白底。
-    /// 强度按「最花的照片也能读」定：0.5 左右，卡片那层 5.5% 的白才重新看得出来。
+    /// 整层背景的不透明度，**直接就是滑杆的值**。
     ///
-    /// 浅色那档比深色低一截：白纱盖在照片上会把整张图洗成一片灰白，色相全丢，
-    /// 看上去和「系统材质」没区别——用户选了图却看不出选了图。
+    /// 这是「不透明度」最直白的读法，也是唯一能让「桌面透过来」真正可见的做法：
+    /// `NSVisualEffectView(.behindWindow)` 的透光率实测只有 ~17%（白窗垫在底下，
+    /// 窗口底色只亮了 14/255），单靠它，滑杆拉到哪里都还是一块实色——用户反馈的
+    /// 「还是完全不透明，看不到后面内容」就是这个。
     ///
-    /// **照片这层不跟滑杆走**（和纯色的 `tintScrim` 不一样）：纯色的颜色是我们自己
-    /// 定的，铺满时它自己就能保证可读；照片的内容不可控，一张雪景铺满也照样白字白底，
-    /// 所以纱必须一直在。
-    private var scrim: Color {
-        Color(nsColor: NSColor(name: nil) { appearance in
-            let dark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-            return dark
-                ? NSColor.black.withAlphaComponent(0.52)
-                : NSColor.white.withAlphaComponent(0.50)
+    /// 系统材质那一档没有滑杆（材质的不透明度由系统控制），恒为 1。
+    private var alpha: Double { backdrop.kind == .material ? 1 : backdrop.opacity }
+
+    /// 层内的玻璃：满强度的材质 + 满强度的染色（或照片）。
+    ///
+    /// **浓度不跟滑杆走**——滑杆调的是「有多透」，不是「颜色有多浓」。这样不管拉到
+    /// 哪里，窗口都还是同一个色相，只是后面露出多少不同。早先让染色 alpha 跟着滑杆
+    /// 走，结果是「拉低变灰、拉高变艳」，跟用户对不透明度的预期完全是两回事。
+    private var glass: some View {
+        ZStack {
+            switch backdrop.kind {
+            case .material:
+                MaterialView()
+            case .solid:
+                MaterialView()
+                backdrop.preset.color
+                sheen
+            case .image:
+                if let image {
+                    MaterialView()
+                    Image(nsImage: image)
+                        .resizable()
+                        .scaledToFill()
+                    // 磨砂已经烘在文件里了，这层材质只负责 macOS 的「活力」观感：
+                    // 压暗、降饱和、加一点系统调的噪点。去掉它照片会艳得卡片都看不见，
+                    // 单靠纱补不回来——纱只能整体压黑，压不出那种去饱和的灰。
+                    // 它只占 1MB 左右（真正贵的是图本身，见 importImage 的注释）。
+                    MaterialView(material: .hudWindow, blending: .withinWindow)
+                    sheen
+                } else {
+                    // 图片文件被删了/格式不认：退回材质，总比一片黑好
+                    MaterialView()
+                }
+            }
+        }
+    }
+
+    /// 压在**整层背景之上**的纱，注意它在 `.opacity()` 外面。
+    ///
+    /// 位置是这件事的关键：滑杆把整层降到 35% 时，如果纱在层内，它也会被一起降到
+    /// 35%，等于什么都没兜住。放在层外，它挡的是「最终到达眼睛的画面」——不管后面
+    /// 是壁纸、别的窗口还是一张照片，亮度都有上限。
+    ///
+    /// 强度跟着滑杆反向走：越透明，后面越不可控，越需要纱。深色主题纯色那档
+    /// 从 0.38（35%）降到 0.10（100%）——上限按最坏情况定：纯白壁纸垫底、
+    /// 滑杆拉到 35%，白 72% 的文字仍有 5.3:1。
+    ///
+    /// 100% 留 0.10 而不是归零：预设色比「玻璃 + 纱」亮，归零后那一档反而更亮，
+    /// 实测表头会从 3.9:1 掉到 3.5:1。浅色不留——浅色主题的问题是太暗，白纱帮倒忙。
+    private var veil: Color {
+        // 滑杆归一化：0 = 最透明那档，1 = 完全不透明
+        let lo = Backdrop.opacityRange.lowerBound
+        let t = min(1, max(0, (alpha - lo) / (1 - lo)))
+
+        var dark = 0.26
+        var light = 0.18
+        switch backdrop.kind {
+        case .material:
+            break
+        case .solid:
+            dark = 0.38 - 0.28 * t
+            light = 0.30 - 0.30 * t
+        case .image:
+            // 照片的内容不可控，一张雪景铺满也照样白字白底，纱必须一直在
+            dark = 0.40
+            light = 0.38
+        }
+
+        let preset = backdrop.preset
+        return Color(nsColor: NSColor(name: nil) { appearance in
+            let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            if isDark {
+                return NSColor.black.withAlphaComponent(dark)
+            }
+            // 浅色主题的纯色背景，纱用**预设色自己**而不是白：白纱盖在浅色染色上
+            // 会把色相洗没（选了 ocean 得到一片白，和「系统材质」没区别）。预设色
+            // 本身就是浅色，同样能把底色抬到黑字读得清的范围，还顺带保住色相。
+            if backdrop.kind == .solid {
+                return NSColor(hex: preset.light).withAlphaComponent(light)
+            }
+            return NSColor.white.withAlphaComponent(light)
         })
     }
 
     /// 玻璃上的一层高光，从左上到右下淡出。纯色背景全靠它「有玻璃感」，
     /// 不然就只是一块染了色的板子。
     ///
-    /// 强度跟着**玻璃的可见程度**走：染色铺满时这就是一块实色漆，没有玻璃，
-    /// 也就不该有高光。留着它还有实际代价——0.10 的白盖在纯色上把底色抬了
-    /// 二十几级，实测次要文字从 5.3:1 掉到 4.4:1，正好卡在 WCAG 的线下面。
+    /// 压到 0.07：它盖在**最上面**，抬的是最终底色，留多了直接把次要文字往下拽
+    /// （0.10 时实测副标题从 5.9:1 掉到 5.0:1）。它跟着 `glass` 一起被滑杆稀释，
+    /// 所以越透明越弱，正好。
     private var sheen: LinearGradient {
         LinearGradient(
-            colors: [Color.white.opacity(0.10), Color.white.opacity(0.0)],
+            colors: [Color.white.opacity(0.07), Color.white.opacity(0.0)],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
     }
 
-    /// 染色/照片的浓度，**直接就是滑杆的值**。
-    ///
-    /// 这里以前是 `0.40 + 0.45 * opacity`：滑杆 0.6~1 只能把它从 0.67 推到 0.85。
-    /// 而深色的预设色和「磨砂桌面 + 纱」的亮度本来就撞在一起，0.18 的 alpha 差值
-    /// 落到屏幕上只剩 2.4/255——整根滑杆拉到底，画面几乎没动，用户反馈的
-    /// 「只能改变一点点亮度」就是这个。现在的映射是 1:1，滑杆走 35%→100%，
-    /// 染色就从「35% 的色 + 65% 的桌面」一路铺到「纯色、桌面完全盖住」。
-    private var tint: Double { backdrop.opacity }
-
-    /// 「玻璃还剩多少可见」：滑杆到底就是 0，最淡那档是 1。
-    /// 高光和纱都按它走——它们是玻璃的属性，染色铺满时玻璃已经不存在了。
-    private var glass: Double {
-        let lo = Backdrop.opacityRange.lowerBound
-        return 1 - min(1, max(0, (tint - lo) / (1 - lo)))
-    }
-
-    /// 压在染色上的纱，**跟着玻璃的可见程度反向走**。
-    ///
-    /// 染色越薄，桌面越是直接进眼睛，越需要它把可读性兜住；染色铺满时桌面根本
-    /// 透不过来，纱就只剩「把颜色压暗」了。所以它一路降到很薄，但**不归零**。
-    ///
-    /// 深色留 0.10 的底是有账的：预设色本身比「玻璃 + 纱」亮（teal 的相对亮度
-    /// 0.075，原来那档玻璃是 0.066），一点不留的话 100% 那档反而更亮，实测
-    /// 表头从 3.9:1 掉到 3.5:1——修滑杆把可读性修回去了，不能这么收场。
-    /// 浅色不留：浅色主题的问题是太暗，白纱只会帮倒忙。
-    ///
-    /// 上限按最坏情况定：深色主题 + 纯白壁纸 + 滑杆拉到 35%，白字仍要 4.5:1。
-    private var tintScrim: Color {
-        Color(nsColor: NSColor(name: nil) { appearance in
-            let dark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-            let lo = dark ? 0.10 : 0.0
-            let hi = dark ? 0.42 : 0.30
-            let a = lo + (hi - lo) * glass
-            return dark
-                ? NSColor.black.withAlphaComponent(a)
-                : NSColor.white.withAlphaComponent(a)
-        })
-    }
-
-    /// 系统材质上的压暗层，**保证可读性的兜底**。
-    ///
-    /// 背景走的是 `.behindWindow`，透的是桌面——壁纸亮一点，整个窗口就跟着发白，
-    /// 白 55% 的次要文字直接掉到 3:1 以下（这台机器上实测 3.14:1，WCAG 对小字要求
-    /// 4.5:1）。压一档把底色拉到可预期的范围：桌面照样透得过来，只是不再由壁纸的
-    /// 明暗决定可读性。
-    ///
-    /// 这一层是**定值**，不跟滑杆走：系统材质那一档滑杆本来就是灰的（材质的不透明度
-    /// 由系统控制，没得调），固定住才能拿它当「其余各档的亮度基准」。
-    private var glassScrim: Color {
-        Color(nsColor: NSColor(name: nil) { appearance in
-            let dark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-            return dark
-                ? NSColor.black.withAlphaComponent(0.26)
-                : NSColor.white.withAlphaComponent(0.18)
-        })
-    }
-
     var body: some View {
         ZStack {
-            switch backdrop.kind {
-            case .material:
-                MaterialView()
-                glassScrim
-            case .solid:
-                MaterialView()
-                // 玻璃打底 + 染色，浓度由滑杆给
-                backdrop.preset.color.opacity(tint)
-                tintScrim
-                sheen.opacity(glass)
-            case .image:
-                if let image {
-                    // 照片下面**必须垫一层磨砂**：照片一旦不到满浓度，桌面就从
-                    // 它下面直接透上来，而且是没磨过、没压过的生像素——和
-                    // 「整层降透明度」是同一个错误，只是换了个入口。
-                    MaterialView()
-                    Image(nsImage: image)
-                        .resizable()
-                        .scaledToFill()
-                        // 照片的浓度也直接跟滑杆走：压下去是「照片淡进毛玻璃里」。
-                        .opacity(tint)
-                    // 磨砂已经烘在文件里了，这层材质只负责 macOS 的「活力」观感：
-                    // 压暗、降饱和、加一点系统调的噪点。去掉它照片会艳得卡片都看不见，
-                    // 单靠纱补不回来——纱只能整体压黑，压不出那种去饱和的灰。
-                    // 它只占 1MB 左右（真正贵的是图本身，见 importImage 的注释）。
-                    MaterialView(material: .hudWindow, blending: .withinWindow)
-                    scrim.opacity(0.75)
-                    sheen.opacity(glass)
-                } else {
-                    // 图片文件被删了/格式不认：退回材质，总比一片黑好
-                    MaterialView()
-                    glassScrim
-                }
-            }
+            // 滑杆作用在**整层**上：这一降，桌面就从下面直接透上来。
+            // 桌面是清晰的——磨砂材质只占 `alpha` 那部分，这也是「真透明」的代价。
+            glass.opacity(alpha)
+            veil
         }
-        // 这里**不乘** `backdrop.opacity`。窗口是 isOpaque = false，整层降透明度
-        // 会让窗口本身变成「半透明塑料膜」，底下透出来的是没磨过、没压过的桌面——
-        // 滑杆拉到 70% 就等于给整窗垫了 30% 的生壁纸，白字压上去只有 3:1 出头。
-        // 「桌面透过来」这件事由材质本身负责（它磨的就是桌面），滑杆只管染色浓淡。
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .clipped()
         .allowsHitTesting(false)
