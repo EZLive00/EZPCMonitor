@@ -103,6 +103,22 @@ private enum ProcSort: String {
     case cpu, mem
 }
 
+/// 磁盘列表内容的底边（global 坐标）。
+private struct DiskContentBottomKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
+/// 磁盘列表视口的底边（global 坐标）。两者相减就是「下面还剩多少没露出来」。
+private struct DiskViewportBottomKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
 struct DashboardView: View {
     @ObservedObject var model: AppModel
     @EnvironmentObject private var i18n: L10n
@@ -112,6 +128,11 @@ struct DashboardView: View {
 
     @State private var detail: Disk?
     @State private var procSort: ProcSort = .cpu
+
+    /// 磁盘列表的滚动位置。两个 global 底边相减就知道下面还有没有东西，
+    /// 不用具名坐标空间（`coordinateSpace(name:)` 在 macOS 14 已经换了写法）。
+    @State private var diskContentBottom: CGFloat = 0
+    @State private var diskViewportBottom: CGFloat = 0
 
     private var snap: Snapshot? { model.snapshot }
 
@@ -449,6 +470,17 @@ struct DashboardView: View {
 
     // MARK: 磁盘
 
+    /// 底边渐隐的高度。约等于一行文字，够让人看出「这儿被淡掉了」，
+    /// 又不至于把最后一行盖没。
+    private static let diskFade: CGFloat = 22
+
+    /// 下面还有没露出来的盘吗——只有「内容比视口高」且「没滚到底」时为真。
+    ///
+    /// 内容装得下时 `remaining` 是负的，滚到底时也回到 0，两种情况都不该有渐隐。
+    private var showsMoreDisks: Bool {
+        diskContentBottom - diskViewportBottom > 0.5
+    }
+
     private func diskCard(_ snap: Snapshot) -> some View {
         CardBox {
             VStack(alignment: .leading, spacing: 0) {
@@ -465,16 +497,56 @@ struct DashboardView: View {
                     .lineLimit(1)
                 }
 
-                ScrollView {
-                    VStack(spacing: 8) {
-                        ForEach(snap.disks) { d in
-                            diskRow(d)
-                        }
-                    }
-                    .padding(.top, 8)
-                }
-                .scrollIndicators(.never)
+                diskList(snap)
             }
+        }
+    }
+
+    /// 磁盘列表。盘多了在这块 178pt 高的卡里滚。
+    ///
+    /// 单独拆出来不只是为了好读：整张卡的类型一复杂，编译器就会
+    /// 「unable to type-check this expression in reasonable time」。
+    private func diskList(_ snap: Snapshot) -> some View {
+        ScrollView {
+            VStack(spacing: 8) {
+                ForEach(snap.disks) { d in
+                    diskRow(d)
+                }
+            }
+            .padding(.top, 8)
+            .background(
+                GeometryReader { g in
+                    Color.clear.preference(
+                        key: DiskContentBottomKey.self,
+                        value: g.frame(in: .global).maxY
+                    )
+                }
+            )
+        }
+        // 平时不画滚动条，滚的时候才浮出来——一条常驻的滚动条在 178pt
+        // 高的卡里比内容还抢眼
+        .scrollIndicators(.automatic)
+        .background(
+            GeometryReader { g in
+                Color.clear.preference(
+                    key: DiskViewportBottomKey.self,
+                    value: g.frame(in: .global).maxY
+                )
+            }
+        )
+        .onPreferenceChange(DiskContentBottomKey.self) { diskContentBottom = $0 }
+        .onPreferenceChange(DiskViewportBottomKey.self) { diskViewportBottom = $0 }
+        // 底边渐隐。用 mask 而不是盖一层渐变：卡片本身是半透明的，
+        // 任何实色渐变都会把背后的桌面/照片染脏，只有把内容自己淡出去才对。
+        .mask { diskMask }
+        .animation(.easeOut(duration: 0.16), value: showsMoreDisks)
+    }
+
+    private var diskMask: some View {
+        VStack(spacing: 0) {
+            Color.black
+            LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
+                .frame(height: showsMoreDisks ? Self.diskFade : 0)
         }
     }
 
