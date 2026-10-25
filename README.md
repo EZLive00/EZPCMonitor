@@ -50,7 +50,8 @@ CPU 那行不是笔误：1 秒一拍时确实要 5.5%，其中采集内核约 1%
 - **无边框感的窗口**：内容延伸到标题栏底下，标题栏只剩三个红绿灯，正文和标题栏之间那条分隔线去掉了；正文自动让开红绿灯（安全区），窗口任意空白处都能拖
 - **两种形态**：卡片（双环 + 温度 + 趋势）/ 紧凑条（单行）。条模式右键会把整条换成操作按钮，双击展开回卡片
 - **主面板与悬浮窗互斥**：桌面上永远只有一个——打开面板自动收起悬浮窗，关掉面板再放回来；反过来点悬浮窗的 ✕ 只收起挂件，不会把主面板翻出来
-- **点图标就开面板**：菜单栏图标左键直接开主面板（已经开着就提到前面），右键（或 Control-点）才弹菜单
+- **点图标就开面板**：菜单栏图标左键直接开主面板（已经开着就提到前面），右键（或 Control-点）才弹菜单；Dock 里点图标同样开主面板
+- **菜单栏图标就是 App 图标那条心电折线**：同一份几何数据生成，抠成模板图（`isTemplate`），深色栏上是白的、浅色栏上是黑的，不另画一套
 - **托盘全控**：主面板开 / 关、悬浮窗显示 / 隐藏、形态切换（卡片 / 紧凑条）、不透明度（100/90/80/70/60%）、采集频率都在菜单里点，偏好下次启动还记得
 - **采集频率可调**：高（1 秒）/ 中（5 秒）/ 低（10 秒）三档 + 自定义（0.5–60 秒），托盘菜单和主面板齿轮都能改，改完当拍生效并记住
 - **历史可回溯**：开启后每 10 秒记一条，保留 1 小时到 30 天（或自定义），点「历史」就能看过去六项指标的曲线和峰值。**默认关闭**，写不写盘你说了算
@@ -110,11 +111,14 @@ CPU 那行不是笔误：1 秒一拍时确实要 5.5%，其中采集内核约 1%
 │   │   ├── Core/              Engine(C ABI 封装) · Models · History · Leaders · L10n
 │   │   └── UI/                悬浮窗 · 主面板 · 背景 · 历史 · 设置 · 磁盘详情 · 报告图 · 报告预览 · 组件
 │   ├── i18n/                  七份字典（TS 源码，构建时导出 JSON）
-│   ├── Resources/             Info.plist · AppIcon.icns · strings.json · bin/smartctl
+│   ├── Resources/             Info.plist · AppIcon.icns · tray-template*.png · strings.json · bin/smartctl
 │   ├── tools/                 extract-strings.mjs（TS → strings.json）
 │   └── build.sh               构建入口
 ├── docs/                      技术方案 / 决策记录 / 截图
-└── app-icon.png               图标源图（scripts/gen_icon.py 画 1024² PNG，再用 iconutil 转 .icns）
+├── scripts/
+│   ├── gen_icon.py            画 1024² 应用图标（纯标准库）
+│   └── gen_tray_icon.py       同一条折线 → 菜单栏模板图（1x/2x/3x）
+└── app-icon.png               图标源图（gen_icon.py 生成，再用 iconutil 转 .icns）
 ```
 
 ## 架构：Rust 内核 + C ABI + SwiftUI
@@ -265,6 +269,7 @@ SMART 直通，这种情况会显示系统给的状态并说明原因，而不�
 |---|---|
 | 左键点菜单栏图标 | 打开主面板（已经开着就提到前面来） |
 | 右键 / Control-点图标 | 弹菜单 |
+| 点 Dock 图标 | 打开主面板（`applicationShouldHandleReopen`） |
 | 关掉主面板（✕、⌘W、托盘「关闭主面板」） | 悬浮窗回到桌面 |
 | 关掉悬浮窗（✕、托盘「隐藏悬浮窗」） | **就只是收起**，不会把主面板翻出来 |
 | 托盘「打开主面板」/「显示悬浮窗」 | 开哪个就把另一个收起来 |
@@ -289,6 +294,29 @@ release 一次，而 controller 的 `windowWillClose` 里又把 `window` 置 nil
 多出来的那次不会当场炸，而是等当前 runloop 回调的自动释放池排空时对着已释放的对象再发一次
 消息——`EXC_BAD_ACCESS`，栈里只有 `objc_msgSend ← AutoreleasePoolPage::releaseUntil`，
 看不出是谁。四个窗口全部显式置 `false`。
+
+### 两个图标
+
+| | 用的是什么 |
+|---|---|
+| Dock / ⌘Tab | `AppIcon.icns`，蓝底白色心电折线 |
+| 菜单栏 | 同一条折线抠成的**模板图**（`tray-template.png`，1x/2x/3x 三档） |
+
+菜单栏图标没另画一套：`scripts/gen_tray_icon.py` 直接 import `gen_icon.py` 里的
+`PTS` / `STROKE`，用同一份几何数据重画成纯黑 + alpha 的模板图。`isTemplate = true`
+之后 AppKit 只看 alpha，按菜单栏当前颜色重新着色——深色栏上是白的、浅色栏上是黑的，
+不用备两套。改 `gen_icon.py` 的折线，两个图标一起变。
+
+菜单栏图标是 20×10pt（折线本来就是个扁平波形），线宽 1.5pt——等比算出来只有 1.29pt，
+在菜单栏里偏淡，加粗了一档。资源没打进包时回落成系统符号 `gauge`，不至于在菜单栏里
+留一个看不见但能点的空白。
+
+**Dock 图标这里有个坑：`LSUIElement` 会被 LaunchServices 缓存。** 早先按纯菜单栏工具
+做过（`LSUIElement = true`，不占 Dock），后来改成普通应用，把 plist 里那段删掉、重新
+构建、重开进程——`lsappinfo info -only ApplicationType` 还是报 `UIElement`，Dock 里
+就是不出现。`lsregister -f`、`killall Dock` 都试过，无效。最后的做法是在
+`applicationDidFinishLaunching` 里显式 `NSApp.setActivationPolicy(.regular)`，行为不
+依赖那份缓存。**改这块之前先看 `Info.plist`，两处必须一致。**
 
 
 ## 语言
@@ -385,8 +413,8 @@ Top5 高占用程序，底部带生成时间和采样点数。
 | 指标 | 实测 |
 |---|---|
 | 安装包（`.app`） | **6.4 MB**（含自带的 705 KB smartctl） |
-| 二进制 | 5.3 MB |
-| 悬浮窗常驻内存 | **17 MB**（`phys_footprint`）/ 40 MB（RSS，含 dyld 共享缓存） |
+| 二进制 | 5.4 MB |
+| 悬浮窗常驻内存 | **17 MB**（`phys_footprint`）/ 41 MB（RSS，含 dyld 共享缓存） |
 | 主面板打开 | **32 MB**（默认背景）· 36 MB（换成自定义图片） |
 | 常驻 CPU | **约 6~8% 单核**（1 秒采集）· **约 2.3~2.8%**（5 秒采集） |
 

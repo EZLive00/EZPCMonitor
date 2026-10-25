@@ -823,3 +823,52 @@ SwiftPM）、用 UniFFI 之类的绑定生成器、或者手写一层 C ABI。
 DMG 也不管用（sysinfo 会跳过磁盘映像）。于是临时加了个 `--many-disks` 开关，把
 `snap.disks` 换成 5 块假盘，跑起来截了四种状态：溢出（底边渐隐）、滚到底（渐隐消失、
 最后两行实心）、滚动中（右侧浮出滚动条）、单盘（无渐隐）。验完把开关删掉。
+
+## ADR-027 · 恢复 Dock 图标，菜单栏改用品牌折线的模板图
+
+**日期**：2026-10-25 · **状态**：生效
+
+**背景**：原生版一开始按「纯菜单栏工具」做——`Info.plist` 里 `LSUIElement = true`，
+不占 Dock、不进 ⌘Tab。实际用下来有两个问题：
+
+1. 关掉窗口后，Dock 和 ⌘Tab 里都找不到这个程序，想再打开只能去点菜单栏那个小图标；
+   第一次用的人会以为它已经退出了。
+2. 菜单栏图标是系统符号 `gauge`（单色仪表盘），和 App 图标（蓝底白色心电折线）
+   对不上，托盘里那个图标认不出是谁。
+
+**决定**：
+
+1. 去掉 `LSUIElement`，按普通应用运行；点 Dock 图标开主面板
+   （`applicationShouldHandleReopen`，默认实现是「没窗口就什么都不做」，
+   而这里平时唯一的窗口是收起来的悬浮窗，看起来就像点了没反应）。
+2. 菜单栏图标改成 App 图标里那条心电折线，做成**模板图**（`isTemplate = true`）。
+3. 折线的几何**不另画一份**：`scripts/gen_tray_icon.py` 直接 `import` `gen_icon.py`
+   的 `PTS` / `STROKE`，用同一份数据重画。改一处，两个图标一起变。
+
+**为什么用模板图**：模板图 AppKit 只看 alpha，按菜单栏当前颜色重新着色——深色栏上是
+白的、浅色栏上是黑的，不用备两套资源，也不用管用户在哪个外观下。彩色图（旧 Tauri 版
+的做法，直接拿 `app.default_window_icon()`）不跟随深浅色，深色栏上会显脏。
+
+**尺寸**：20×10pt，线宽 1.5pt。折线本身是个扁平波形（长宽比 678:296），铺满 20pt 宽
+之后高度只有 8.7pt——和 SF Symbols 里 `waveform.path.ecg` 一类的视觉分量一致。线宽
+等比算出来是 1.29pt，在菜单栏里偏淡，加粗到 1.5pt。
+
+**踩到的坑**：
+
+- **`LSUIElement` 会被 LaunchServices 缓存。** 把 plist 里那段删掉、重新构建、重开
+  进程，`lsappinfo info -only ApplicationType` 还是报 `UIElement`，Dock 里就是不出现。
+  `lsregister -f <app>` 和 `killall Dock` 都试过，都没用；`lsregister -dump` 里那条
+  记录其实已经没有 `LSUIElement` 了。最后的做法是在 `applicationDidFinishLaunching`
+  里显式 `NSApp.setActivationPolicy(.regular)`，行为不依赖那份缓存。
+- **诊断时踩了自己的坑**：用 `(./EZPcMonitor &)` 直接跑二进制，进程会跟着 shell 退出
+  被回收，于是连续几张 Dock 截图里都没有图标，看起来像「Dock 图标没生效」。改用
+  `open -n` 启动后立刻就能看到。**验证 GUI 状态前先确认进程还活着。**
+- 生成图标时 `STROKE` 要跟着缩放，但**外接框也要算上线宽**（`min - STROKE/2`），
+  否则圆头会被画布切掉一点。
+
+**怎么验的**：`lsappinfo info -only ApplicationType` 从 `UIElement` 变成 `Foreground`；
+Dock 里出现蓝底折线图标（带运行指示点）；`open <app>`（不带 `-n`，走 reopen 路径，
+和点 Dock 图标同一条）后主面板打开、悬浮窗收起；菜单栏截图里折线在深色栏上呈白色。
+
+**占用**：`.app` 6.4 MB 不变，二进制 5.3 → 5.4 MB（多出来的图标加载和激活策略代码），
+悬浮窗 17 MB、主面板 32 MB 都没动。
