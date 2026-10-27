@@ -79,7 +79,7 @@ export const strings: Dict = {
   "set.backdropApply": "套用這張圖片",
   "set.backdropInUse": "正在使用 · 右鍵可換圖或清空",
   "set.backdropReplace": "換一張…",
-  "set.backdropOpacityHint": "只作用於背景層，文字與卡片始終不透明",
+  "set.backdropOpacityHint": "只作用於背景層；卡片是半透明磨砂，文字始終不透明",
   "set.group.history": "歷史記錄",
   "set.viewHistory": "檢視歷史 ›",
   "set.record": "記錄歷史",

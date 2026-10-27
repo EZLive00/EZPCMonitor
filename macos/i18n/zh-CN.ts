@@ -89,7 +89,7 @@ export const strings = {
   "set.backdropApply": "应用这张图片",
   "set.backdropInUse": "正在使用 · 右键可换图或清空",
   "set.backdropReplace": "换一张…",
-  "set.backdropOpacityHint": "只作用于背景层，文字和卡片始终不透明",
+  "set.backdropOpacityHint": "只作用于背景层；卡片是半透明磨砂，文字始终不透明",
   "set.group.history": "历史记录",
   "set.viewHistory": "查看历史 ›",
   "set.record": "记录历史",

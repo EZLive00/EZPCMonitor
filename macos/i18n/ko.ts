@@ -79,7 +79,7 @@ export const strings: Dict = {
   "set.backdropApply": "이 이미지 적용",
   "set.backdropInUse": "사용 중 · 오른쪽 클릭으로 교체 또는 삭제",
   "set.backdropReplace": "다른 이미지…",
-  "set.backdropOpacityHint": "배경 레이어에만 적용됩니다. 텍스트와 카드는 불투명",
+  "set.backdropOpacityHint": "배경 레이어에만 적용됩니다. 카드는 반투명 유리, 텍스트는 불투명",
   "set.group.history": "기록",
   "set.viewHistory": "기록 보기 ›",
   "set.record": "기록 저장",

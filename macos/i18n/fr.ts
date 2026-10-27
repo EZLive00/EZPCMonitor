@@ -79,7 +79,7 @@ export const strings: Dict = {
   "set.backdropApply": "Appliquer cette image",
   "set.backdropInUse": "Utilisée — clic droit pour remplacer ou effacer",
   "set.backdropReplace": "Remplacer…",
-  "set.backdropOpacityHint": "S'applique au fond uniquement — le texte et les cartes restent opaques",
+  "set.backdropOpacityHint": "Fond uniquement — les cartes sont en verre dépoli, le texte reste net",
   "set.group.history": "Historique",
   "set.viewHistory": "Voir l'historique ›",
   "set.record": "Enregistrer l'historique",
