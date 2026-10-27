@@ -51,13 +51,23 @@ struct Backdrop: Codable, Equatable {
     ///
     /// 深色那档不能压得太黑：纯色是「玻璃 + 染色」，颜色本身太暗的话，
     /// 盖在本来就暗的材质上会看不出色相，只剩一块黑。
+    ///
+    /// 也不能太亮：白字压在浅色底上直接掉到 3:1 以下（天空蓝 #1573B8 这种
+    /// 「正宗的鲜艳」实测就压线）。所以鲜艳的那几档都是**深色调的高饱和**——
+    /// 色相拉满、明度压住，看起来仍然是天蓝 / 海蓝 / 落日黄，但白字读得清。
     static let colors: [BackdropColor] = [
+        // 天蓝：最亮的一档鲜艳色，选它就图个通透
+        .init(id: "sky", dark: 0x1573B8, light: 0xCFE9FC),
+        // 海蓝：比天蓝深一档，偏冷
+        .init(id: "ocean", dark: 0x0F4677, light: 0xC2DCF2),
+        // 落日黄：深琥珀。再亮一点白字就压不住了（见上面的注释）
+        .init(id: "sunset", dark: 0x8C4A08, light: 0xFBE3B8),
+        // 珊瑚：偏红的暖色，和落日黄拉开
+        .init(id: "coral", dark: 0x8E3346, light: 0xFAD8DE),
+        .init(id: "violet", dark: 0x4B347E, light: 0xE6DFFB),
+        // 沉稳的两档：墨绿和石墨，用久了不扎眼
+        .init(id: "forest", dark: 0x1B4A3A, light: 0xD2EBDF),
         .init(id: "graphite", dark: 0x3D4453, light: 0xE9EDF3),
-        .init(id: "ocean", dark: 0x1D4E70, light: 0xDBEDFB),
-        .init(id: "teal", dark: 0x17564F, light: 0xD8F2EE),
-        .init(id: "violet", dark: 0x3E3063, light: 0xEAE4FA),
-        .init(id: "sand", dark: 0x4E4231, light: 0xF6EEDC),
-        .init(id: "rose", dark: 0x4E2F3E, light: 0xFAE3EC),
     ]
 }
 
