@@ -30,6 +30,10 @@ private struct ReportTheme {
     let line: Color
     let fill: Color
     let accent: Color
+    /// 结论标签用的三档状态色，和界面里的 `Palette.ok / warn / danger` 同源。
+    let ok: Color
+    let warn: Color
+    let danger: Color
 
     static func current() -> ReportTheme {
         let dark = NSApp.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
@@ -41,7 +45,10 @@ private struct ReportTheme {
                 dim: Color(hex: 0x6b7785),
                 line: Color.white.opacity(0.09),
                 fill: Color.white.opacity(0.045),
-                accent: Color(hex: 0x22d3ee)
+                accent: Color(hex: 0x22d3ee),
+                ok: Color(hex: 0x34d399),
+                warn: Color(hex: 0xfbbf24),
+                danger: Color(hex: 0xf87171)
             )
             : ReportTheme(
                 bg: Color(hex: 0xffffff),
@@ -50,7 +57,10 @@ private struct ReportTheme {
                 dim: Color(hex: 0x8a949e),
                 line: Color.black.opacity(0.09),
                 fill: Color.black.opacity(0.035),
-                accent: Color(hex: 0x0891b2)
+                accent: Color(hex: 0x0891b2),
+                ok: Color(hex: 0x059669),
+                warn: Color(hex: 0xd97706),
+                danger: Color(hex: 0xdc2626)
             )
     }
 
@@ -91,9 +101,6 @@ private struct ReportPage: View {
     private let w: CGFloat = 1080
     private let pad: CGFloat = 56
     private var content: CGFloat { w - pad * 2 }
-
-    private var cpuBuckets: [Bucket] { SeriesLogic.buckets(input.points, .cpu, count: 400) }
-    private var cpuPeak: Double { cpuBuckets.map(\.max).max() ?? 0 }
 
     private var peakPoint: HistoryPoint? {
         input.points.max { $0.cpu < $1.cpu }
@@ -150,30 +157,70 @@ private struct ReportPage: View {
 
     // MARK: 结论条
 
-    private var strip: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            HStack(spacing: 6) {
-                Text(i18n.t("rep.peak"))
-                    .foregroundStyle(theme.text)
-                Text(i18n.t("hist.mCpu"))
-                    .foregroundStyle(theme.text)
-                Text("\(Int(cpuPeak.rounded()))%")
-                    .foregroundStyle(theme.text)
-                if let p = peakPoint {
-                    Text("· \(i18n.clock(p.t, withDate: input.withDate))")
-                        .foregroundStyle(theme.muted)
-                }
-            }
-            .font(.system(size: 18, weight: .bold))
+    /// 全段的均值与峰值。**用原始点算，不经过分桶**——分桶取的是桶内峰值，
+    /// 桶一多就会把真正的尖峰削掉一截（`SeriesLogic.stats` 的注释里也写了）。
+    private var cpuStats: (avg: Double, max: Double) {
+        SeriesLogic.stats(input.points, .cpu)
+    }
 
-            if let top = topProc {
-                Text("\(clip(top.name, 34)) · \(i18n.t("hist.colMean")) \(LeadersLogic.format(.cpu, .mean, top.cpu.mean)) · \(i18n.t("hist.colPeak")) \(LeadersLogic.format(.cpu, .peak, top.cpu.peak))")
+    private var memPeak: Double { input.points.map(\.mem).max() ?? 0 }
+    private var tempPeak: Double { input.points.map(\.temp).max() ?? 0 }
+
+    /// 一句结论的档位。阈值不是拍脑袋定的：
+    /// - 平均 ≥ 45% 说明整段时间都在跑重活，不是「偶尔忙一下」
+    /// - 峰值 ≥ 75% 但平均不高，就是有尖峰——这种才需要去看峰值发生在什么时候
+    /// - 剩下的都算平稳
+    private var level: (key: String, color: Color) {
+        let s = cpuStats
+        if s.avg >= 45 { return ("rep.levelBusy", theme.danger) }
+        if s.max >= 75 { return ("rep.levelSpiky", theme.warn) }
+        return ("rep.levelCalm", theme.ok)
+    }
+
+    private var peakClock: String {
+        guard let p = peakPoint else { return "" }
+        return i18n.clock(p.t, withDate: input.withDate)
+    }
+
+    /// 结论句。以前这里只有一行「最高峰 CPU 87% · 14:32」加一行程序名，
+    /// 看不出这段区间到底是「一直很忙」还是「就抖了一下」——所以补上均值和档位。
+    private var verdict: String {
+        let s = cpuStats
+        var vars = [
+            "avg": "\(Int(s.avg.rounded()))%",
+            "peak": "\(Int(s.max.rounded()))%",
+            "time": peakClock,
+        ]
+        guard let top = topProc else {
+            return i18n.t("rep.summaryNoProc", vars)
+        }
+        vars["name"] = clip(top.name, 30)
+        vars["v"] = LeadersLogic.format(.cpu, .mean, top.cpu.mean)
+        return i18n.t("rep.summary", vars)
+    }
+
+    private var strip: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .top, spacing: 10) {
+                Text(i18n.t(level.key))
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(level.color)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(level.color.opacity(0.15)))
+                    .overlay(Capsule().strokeBorder(level.color.opacity(0.35), lineWidth: 1))
+
+                Text(verdict)
                     .font(.system(size: 14))
                     .foregroundStyle(theme.muted)
-            } else {
-                Text(i18n.t("rep.noProc"))
-                    .font(.system(size: 14))
-                    .foregroundStyle(theme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            HStack(alignment: .top, spacing: 16) {
+                tile(i18n.t("rep.avgCpu"), "\(Int(cpuStats.avg.rounded()))%", nil)
+                tile(i18n.t("rep.peakCpu"), "\(Int(cpuStats.max.rounded()))%", peakClock)
+                tile(i18n.t("rep.memPeak"), "\(Int(memPeak.rounded()))%", nil)
+                tile(i18n.t("rep.tempPeak"), "\(Int(tempPeak.rounded()))°C", nil)
             }
         }
         .padding(22)
@@ -182,6 +229,24 @@ private struct ReportPage: View {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(theme.fill)
         )
+    }
+
+    /// 四格里的一个。`note` 传 nil 时占一行空白，四格的基线才不会参差。
+    private func tile(_ label: String, _ value: String, _ note: String?) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(label)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(theme.dim)
+            Text(value)
+                .font(.system(size: 23, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(theme.text)
+            Text(note?.isEmpty == false ? note! : " ")
+                .font(.system(size: 11))
+                .monospacedDigit()
+                .foregroundStyle(theme.dim)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: 曲线
@@ -222,8 +287,28 @@ private struct ReportPage: View {
             }
             ReportSpark(values: buckets.map(\.max), color: theme.color(m), line: theme.line, height: 150)
                 .padding(.top, 8)
+            // 横轴：起点 / 中点 / 终点。以前三张图下面什么都没有，看不出这段曲线
+            // 是从几点到几点——只能回头去翻右上角的「统计区间」，再自己脑补。
+            HStack(spacing: 0) {
+                ForEach(Array(ticks(buckets).enumerated()), id: \.offset) { i, s in
+                    if i > 0 { Spacer(minLength: 8) }
+                    Text(s)
+                }
+            }
+            .font(.system(size: 11))
+            .monospacedDigit()
+            .foregroundStyle(theme.dim)
+            .padding(.top, 6)
         }
         .frame(width: width, alignment: .leading)
+    }
+
+    /// 横轴三档。用**桶的首尾时间**而不是原始点的：桶才是图上画的东西，
+    /// 拿原始点的话最后一段可能根本没画进图里，标签和曲线会对不上。
+    private func ticks(_ b: [Bucket]) -> [String] {
+        guard let first = b.first, let last = b.last else { return ["", "", ""] }
+        let mid = b[b.count / 2].t
+        return [first.t, mid, last.t].map { i18n.clock($0, withDate: input.withDate) }
     }
 
     // MARK: 程序
