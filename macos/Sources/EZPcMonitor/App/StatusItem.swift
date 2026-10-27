@@ -80,7 +80,15 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         // popUp 不一定会走 menuNeedsUpdate（取决于这次 runloop 的时机），
         // 手动刷一次，菜单里的标题和勾才是当下的状态。
         menuNeedsUpdate(menu)
-        menu.popUp(positioning: nil, at: NSPoint(x: 0, y: button.bounds.height + 4), in: button)
+
+        // 锚点放在按钮的**下沿**，菜单从菜单栏下面往下展开。
+        //
+        // 以前写的是 `y: bounds.height + 4`（按钮上沿再往上 4pt）。这个值在应用
+        // 是前台时看着没问题——AppKit 会把菜单往下挪；但应用**不在前台**时它按
+        // 原样摆，菜单顶部跑到屏幕外，于是第一项被吃掉、顶上多出一个向上滚动的
+        // 箭头（鼠标划过去菜单往上滚一下，箭头才消失）。用户报的就是这个。
+        // 菜单栏在屏幕最顶上，锚点只要高过按钮上沿就一定有这一截跑到屏幕外。
+        menu.popUp(positioning: nil, at: NSPoint(x: 0, y: 0), in: button)
     }
 
     func menuNeedsUpdate(_ menu: NSMenu) {
