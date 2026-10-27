@@ -4,12 +4,56 @@ import SwiftUI
 
 /// 主面板和弹窗共用的卡片底。
 ///
-/// 不用 `.background(.ultraThinMaterial)`：主面板是不透明窗口，卡片再叠一层
-/// 毛玻璃只会把底下的窗口背景糊成一片灰，反而比纯色淡底更脏。毛玻璃留给
-/// 悬浮窗——那才是真的浮在桌面上、需要透视的地方。
+/// 卡片要不要磨砂，由 `cardFrost` 这个环境值决定。
+///
+/// 主面板的背景现在是**真透明**的（能看到后面的窗口），卡片如果还只是 5.5% 的白，
+/// 整块窗口就是一张平的通透玻璃，看不出哪里是卡片。磨砂把卡片和背景分成两层材质：
+/// 背景是「透」的，卡片是「糊」的。
+///
+/// 用环境值而不是构造参数：主面板里 7 处 `CardBox`，历史窗口 1 处，逐处传等于把
+/// 同一个开关抄 8 遍，还容易漏。历史窗口是**不透明**窗口，磨砂在那儿只会白花内存。
+private struct CardFrostKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    var cardFrost: Bool {
+        get { self[CardFrostKey.self] }
+        set { self[CardFrostKey.self] = newValue }
+    }
+}
+
+/// 卡片自己那层玻璃。
+///
+/// **不用 SwiftUI 的 `.thinMaterial`**：实测它铺在纯色背景上，卡片内部和旁边的
+/// 缝隙只差 1~2 级亮度（同一张截图采样：缝隙 (34,51,69)，卡片 (33,53,67)），
+/// 等于没画——用户的原话就是「区块和背景一种透明效果」。它到底取了哪一层没法控制，
+/// 索性自己搭一层能算清楚的。
+///
+/// 两层：
+/// 1. `NSVisualEffectView`（`.withinWindow`）—— 糊的是**窗口里**的背景（染色或照片），
+///    不是桌面。所以纯色下它就是去饱和 + 加噪点，图片下能把照片糊开，视觉上都是「毛玻璃」。
+/// 2. 一层提亮。深色 12%、浅色 42%：这才是「卡片浮在背景上」的那点亮度差，
+///    也是滑杆拉到 10% 时唯一还能把区块和缝隙分开的东西（实测差 20 级）。
+struct CardFrost: View {
+    var body: some View {
+        ZStack {
+            MaterialView(material: .popover, blending: .withinWindow)
+            Color(nsColor: NSColor(name: nil) { appearance in
+                let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+                // 浅色主题要的是「比背景白」，所以给得多；深色主题只要「比背景亮一点」，
+                // 给多了会变成一块灰板，压掉背景的色相。
+                return NSColor.white.withAlphaComponent(isDark ? 0.12 : 0.42)
+            })
+        }
+    }
+}
+
 struct CardBox<Content: View>: View {
     var padding: CGFloat = 14
     let content: Content
+
+    @Environment(\.cardFrost) private var frost
 
     init(padding: CGFloat = 14, @ViewBuilder content: () -> Content) {
         self.padding = padding
@@ -20,16 +64,18 @@ struct CardBox<Content: View>: View {
         content
             .padding(padding)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    // 3.5% 在半透明窗口上几乎看不见——卡片和底色会糊成一片，
-                    // 「哪里是卡片」全靠留白猜。5.5% + 9% 描边才分得出来，
-                    // 又不至于变成一块块实心板。
-                    .fill(Color.primary.opacity(0.055))
-            )
+            .background {
+                if frost {
+                    CardFrost()
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                } else {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color.primary.opacity(0.055))
+                }
+            }
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .strokeBorder(Color.primary.opacity(0.09), lineWidth: 1)
+                    .strokeBorder(Color.primary.opacity(frost ? 0.14 : 0.09), lineWidth: 1)
             )
     }
 }

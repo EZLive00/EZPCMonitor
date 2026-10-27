@@ -190,6 +190,10 @@ struct DashboardView: View {
         .padding(.top, 14 + titleBarInset)
         .padding(.bottom, 16)
         .frame(minWidth: 880, minHeight: 660)
+        // 卡片改用磨砂（见 `CardBox`）。背景现在是**真透明**的，卡片如果还是
+        // 5.5% 的白，整窗就是一张平的玻璃，看不出哪里是区块。只在主面板开：
+        // 历史窗口是 opaque 的，磨砂在那儿只是白花内存。
+        .environment(\.cardFrost, true)
         .background {
             BackdropLayer(backdrop: model.backdrop, image: model.backdropImage)
                 .background(TitleBarInsetReader(inset: $titleBarInset))
