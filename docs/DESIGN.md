@@ -357,7 +357,7 @@ macOS 的 `ioreg` 方案已在本项目实现并验证可用（Apple M 系列返
 | `get_history` | `seconds` | `HistoryPoint[]` | 长窗图表 |
 | `set_want_procs` | `on: bool` | — | 按需采集进程 |
 | `disk_health` | `force?: bool` | `DiskHealth[]` | 硬盘 SMART，60s 缓存，`force` 跳过缓存 |
-| `disk_bench` | `mount, sizeMb?` | `BenchResult` | 顺序读写测速（async，几秒级 IO） |
+| `disk_bench` | `mount, sizeMb?` | `BenchResult` | 顺序 + 4K 随机读写测速（async，512 MB 档约 5 秒） |
 | `get_settings` | — | `Settings` | 采集间隔 + 历史开关 + 保留时长 + 界面语言 + 主题 |
 | `update_settings` | `patch` | `Settings` | 只传要改的项；夹取 → 落盘 → 广播 `settings:changed` → 刷新托盘 |
 | `history_stats` | — | `HistoryStats` | 条数、占用、实测每条字节数、时间跨度、各档预设 |
@@ -524,7 +524,7 @@ EZPcMonitor/
 │   │   ├── lib.rs          Tauri 装配、命令、托盘
 │   │   ├── metrics.rs      采集内核（类型 + 采集循环 + 环形缓冲）
 │   │   ├── diskhealth.rs   硬盘健康（diskutil + smartctl，带缓存与超时）
-│   │   ├── bench.rs        顺序读写测速（fsync + 绕 page cache）
+│   │   ├── bench.rs        测速（顺序 fsync / 4K 随机 QD1，绕 page cache）
 │   │   ├── settings.rs     本地设置持久化（settings.json）
 │   │   ├── history.rs      历史记录（JSONL 追加写 + 按保留时长修剪）
 │   │   ├── i18n.rs         原生侧文案（托盘 / 窗口标题 / SMART 属性名）
