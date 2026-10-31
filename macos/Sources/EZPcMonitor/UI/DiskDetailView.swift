@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// 磁盘详情。
@@ -21,7 +22,7 @@ struct DiskDetailView: View {
     @State private var size: UInt64 = 512
     @State private var bench: BenchResult?
     @State private var benching = false
-    @State private var error: String?
+    @State private var failure: EngineError?
 
     private static let sizes: [UInt64] = [256, 512, 1024]
 
@@ -98,6 +99,13 @@ struct DiskDetailView: View {
         .padding(18)
         .frame(width: 720, height: 700)
         .background(Color(nsColor: .windowBackgroundColor))
+        // 上次测速的结果是存在盘上的（`bench.json`），打开这一页先捞出来。
+        // 一次 512 MB 的测速要写几百兆，关掉窗口就没了太可惜。
+        .task {
+            if bench == nil {
+                bench = engine.benchLast(mount: disk.mount)
+            }
+        }
     }
 
     // MARK: 头部
@@ -193,7 +201,10 @@ struct DiskDetailView: View {
 
     private var benchSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            sectionTitle(i18n.t("dd.bench"))
+            sectionTitle(
+                i18n.t("dd.bench"),
+                tag: bench.map { i18n.t("dd.benchAt", ["v": benchTime($0.at)]) }
+            )
 
             HStack(spacing: 6) {
                 ForEach(Self.sizes, id: \.self) { s in
@@ -215,8 +226,15 @@ struct DiskDetailView: View {
             if !enoughSpace {
                 note(i18n.t("dd.benchNeed", ["v": Fmt.bytes(Double(needBytes), digits: 0)]))
             }
-            if let error {
-                note(error, color: Palette.warn)
+            if let f = failure {
+                // 没权限和别的失败分开说：前者能引导用户去解决，后者只能报细节。
+                note(benchMessage(f), color: Palette.warn)
+                if f.code == "denied" {
+                    MiniButton(title: i18n.t("dd.benchOpenSettings")) {
+                        openPrivacySettings()
+                    }
+                    .padding(.top, 2)
+                }
             }
 
             if let b = bench {
@@ -261,7 +279,7 @@ struct DiskDetailView: View {
                     )
                 }
                 note(i18n.t("dd.randBlock", ["v": "\(b.randBlockKb)"]))
-                note(i18n.t("dd.benchFile", ["v": b.path]) + (b.note.map { " · \($0)" } ?? ""))
+                note(i18n.t("dd.benchFile", ["v": b.path]) + (b.note.map { " · \(dirNote($0))" } ?? ""))
             }
         }
     }
@@ -279,10 +297,42 @@ struct DiskDetailView: View {
         "\(String(format: "%.1f", mbps)) MB/s · \(String(format: "%.1f", Double(ms) / 1000)) s"
     }
 
+    /// 测速文件放在哪的说明。core 只回一个码，文案在这边。
+    private func dirNote(_ code: String) -> String {
+        code == "cache" ? i18n.t("dd.benchCacheDir") : code
+    }
+
+    /// 「上次测于 …」。今天只给时刻，更早的带上日期。
+    ///
+    /// 走 `L10n.clock` 而不是自己造一个 `DateFormatter`：那个已经按界面语言
+    /// 定好了 `HH:mm`，跟历史记录里的时间轴是同一套格式。用系统 locale 的话，
+    /// 中文界面会冒出「10:34 PM」。
+    private func benchTime(_ secs: UInt64) -> String {
+        let date = Date(timeIntervalSince1970: TimeInterval(secs))
+        return i18n.clock(secs, withDate: !Calendar.current.isDateInToday(date))
+    }
+
+    /// 失败原因：能引导用户解决的（没权限 / 只读）给一句话说清怎么办，
+    /// 其余的把 core 给的技术细节原样摆出来——总比只写「失败」强。
+    private func benchMessage(_ e: EngineError) -> String {
+        switch e.code {
+        case "denied": return i18n.t("dd.benchDenied")
+        case "readonly": return i18n.t("dd.benchReadonly")
+        case "nospace": return i18n.t("dd.benchNoSpace", ["v": Fmt.bytes(Double(size * 1024 * 1024))])
+        default: return i18n.t("dd.benchFailed", ["v": e.message])
+        }
+    }
+
+    /// 打开「隐私与安全性 → 文件与文件夹」。macOS 15 上这个锚点直接落在那一页。
+    private func openPrivacySettings() {
+        let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_FilesAndFolders")!
+        NSWorkspace.shared.open(url)
+    }
+
     private func startBench() {
         guard !benching else { return }
         benching = true
-        error = nil
+        failure = nil
         let mount = disk.mount
         let sizeMb = size
         let engine = self.engine
@@ -294,7 +344,7 @@ struct DiskDetailView: View {
             benching = false
             switch r {
             case .success(let b): bench = b
-            case .failure(let e): error = e.message
+            case .failure(let e): failure = e
             }
         }
     }
@@ -351,6 +401,10 @@ struct DiskDetailView: View {
     ///
     /// 只解释**这张表里真的有的行**：机械盘走的是 ATA 属性表，里面没有
     /// 「可用备用块」，给它配一句解释反而添乱。判断靠 `key`，不靠本地化之后的名字。
+    ///
+    /// 一行都没有就整块不出现——比如磁盘映像这种压根不报 SMART 的卷，
+    /// 留着个光秃秃的「怎么读这张表」标题比不放还怪。
+    @ViewBuilder
     private func glossary(_ h: DiskHealth) -> some View {
         let keys = Set(h.attrs.map(\.key))
         let entries = [
@@ -359,22 +413,24 @@ struct DiskDetailView: View {
             ("media", "dd.glossMediaTerm", "dd.glossMedia"),
         ].filter { keys.contains($0.0) }
 
-        return VStack(alignment: .leading, spacing: 4) {
-            Text(i18n.t("dd.glossTitle"))
-                .font(.system(size: 9.5, weight: .semibold))
-                .foregroundStyle(Ink.tertiary)
-                .padding(.bottom, 1)
+        if !entries.isEmpty {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(i18n.t("dd.glossTitle"))
+                    .font(.system(size: 9.5, weight: .semibold))
+                    .foregroundStyle(Ink.tertiary)
+                    .padding(.bottom, 1)
 
-            ForEach(entries, id: \.0) { e in
-                // 术语用 semibold、解释用常规字重，靠字重而不是颜色区分——
-                // 颜色一多，这一块就比上面的表还热闹。
-                (Text(i18n.t(e.1)).font(.system(size: 10, weight: .semibold))
-                    + Text(" · " + i18n.t(e.2)).font(.system(size: 10)))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                ForEach(entries, id: \.0) { e in
+                    // 术语用 semibold、解释用常规字重，靠字重而不是颜色区分——
+                    // 颜色一多，这一块就比上面的表还热闹。
+                    (Text(i18n.t(e.1)).font(.system(size: 10, weight: .semibold))
+                        + Text(" · " + i18n.t(e.2)).font(.system(size: 10)))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
+            .padding(.top, 10)
         }
-        .padding(.top, 10)
     }
 
     private func attrRow(_ a: SmartAttr) -> some View {

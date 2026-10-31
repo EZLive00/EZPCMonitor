@@ -321,6 +321,11 @@ struct DiskHealth: Decodable, Identifiable {
 // MARK: - 测速
 
 struct BenchResult: Decodable {
+    /// 测的是哪个挂载点。缓存按它存，界面也能据此确认「这是这块盘的结果」
+    let mount: String
+    /// 测完的时刻（Unix 秒）。缓存下来的结果必须能看出是什么时候测的，
+    /// 否则重启后打开这一页会以为刚测过。
+    let at: UInt64
     let sizeMb: UInt64
     let writeMbps: Double
     let readMbps: Double

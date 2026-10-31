@@ -142,6 +142,9 @@ fn dispatch(engine: &Engine, method: &str, args: &serde_json::Value) -> String {
             args.get("mount").and_then(|v| v.as_str()).unwrap_or(""),
             args.get("sizeMb").and_then(|v| v.as_u64()).unwrap_or(512),
         ),
+        "benchLast" => engine.bench_last_json(
+            args.get("mount").and_then(|v| v.as_str()).unwrap_or(""),
+        ),
         "version" => serde_json::Value::String(env!("CARGO_PKG_VERSION").into()).to_string(),
         other => serde_json::json!({ "error": format!("unknown method: {other}") }).to_string(),
     }

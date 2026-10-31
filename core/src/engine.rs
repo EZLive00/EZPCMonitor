@@ -299,9 +299,19 @@ impl Engine {
     }
 
     pub fn bench_json(&self, mount: &str, size_mb: u64) -> String {
-        match bench::run(mount, size_mb) {
+        match bench::run(&self.config_dir, mount, size_mb) {
             Ok(r) => serde_json::to_string(&r).unwrap_or_else(|_| "{}".into()),
-            Err(e) => serde_json::json!({ "error": e }).to_string(),
+            // `code` 让界面分开处理：没权限要引导用户去系统设置，只读盘要说明原因。
+            // 文案在界面那边，这里只给码和技术细节。
+            Err(e) => serde_json::json!({ "error": e.message, "code": e.code }).to_string(),
+        }
+    }
+
+    /// 上次测速的结果（重启后还在）。没有就返回 `null`。
+    pub fn bench_last_json(&self, mount: &str) -> String {
+        match bench::load_last(&self.config_dir, mount) {
+            Some(r) => serde_json::to_string(&r).unwrap_or_else(|_| "null".into()),
+            None => "null".into(),
         }
     }
 }

@@ -1,8 +1,12 @@
 import Foundation
 
 /// core 回给界面的错误。`String` 不满足 `Error`，包一层比到处用 `String?` 干净。
+///
+/// `code` 是少数几个「界面要分开处理」的失败原因（比如测速没权限要去系统设置里
+/// 授权）。文案在界面那边，core 只给码和技术细节。
 struct EngineError: Error, CustomStringConvertible {
     let message: String
+    var code: String? = nil
     var description: String { message }
 }
 
@@ -69,21 +73,29 @@ final class CoreEngine {
         decode([DiskHealth].self, "health", ["force": force]) ?? []
     }
 
-    /// 顺序读写测速。
+    /// 读写测速。
     ///
     /// 返回 `Result` 而不是可选值：失败原因是给用户看的（空间不足、只读卷、
-    /// 权限不够），丢掉它界面上就只能写「失败」两个字。
+    /// 权限不够），丢掉它界面上就只能写「失败」两个字。`code` 用来区分
+    /// 「没权限」这种能引导用户去解决的情况。
     func bench(mount: String, sizeMb: UInt64) -> Result<BenchResult, EngineError> {
         let data = call("bench", ["mount": mount, "sizeMb": sizeMb])
         guard !data.isEmpty else { return .failure(EngineError(message: "no response")) }
         if let r = try? JSONDecoder().decode(BenchResult.self, from: data) {
             return .success(r)
         }
-        struct Err: Decodable { let error: String }
-        if let e = try? JSONDecoder().decode(Err.self, from: data) {
-            return .failure(EngineError(message: e.error))
+        struct Failure: Decodable { let error: String; let code: String? }
+        if let f = try? JSONDecoder().decode(Failure.self, from: data) {
+            return .failure(EngineError(message: f.error, code: f.code))
         }
         return .failure(EngineError(message: String(data: data, encoding: .utf8) ?? "unknown"))
+    }
+
+    /// 上次测速的结果。没测过、或者缓存坏了都返回 nil。
+    func benchLast(mount: String) -> BenchResult? {
+        let data = call("benchLast", ["mount": mount])
+        guard !data.isEmpty else { return nil }
+        return try? JSONDecoder().decode(BenchResult.self, from: data)
     }
 
     @discardableResult
