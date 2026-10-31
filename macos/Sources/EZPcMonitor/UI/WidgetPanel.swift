@@ -71,11 +71,9 @@ final class WidgetController {
         }
 
         model.onModeChanged = { [weak self] in self?.applyMode() }
-        model.onOpacityChanged = { [weak self] in self?.applyOpacity() }
         model.onPinnedChanged = { [weak self] in self?.applyPinned() }
         model.onClickThroughChanged = { [weak self] in self?.applyClickThrough() }
 
-        applyOpacity()
         applyPinned()
         applyClickThrough()
     }
@@ -152,10 +150,10 @@ final class WidgetController {
         panel.setFrame(NSRect(origin: origin, size: size), display: true, animate: false)
     }
 
-    private func applyOpacity() {
-        panel.alphaValue = model.opacity
-    }
-
+    /// **不要再把滑杆接到 `panel.alphaValue` 上。** 窗口的 alpha 会把文字一起降下去：
+    /// 白字降到 60% 就是灰字，压在浅色背景上直接消失——用户报的「看不清内容」里
+    /// 有一半是这一条。现在滑杆只作用在 `WidgetSurface` 的材质那层（见那边的注释），
+    /// 文字永远是实心的，和主面板同一条规矩。
     private func applyPinned() {
         panel.level = model.pinned ? .floating : .normal
     }

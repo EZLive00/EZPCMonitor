@@ -34,7 +34,7 @@ final class AppModel: ObservableObject {
         }
     }
     @Published var opacity: Double {
-        didSet { defaults.set(opacity, forKey: Keys.opacity); onOpacityChanged?() }
+        didSet { defaults.set(opacity, forKey: Keys.opacity) }
     }
     @Published var pinned: Bool {
         didSet { defaults.set(pinned, forKey: Keys.pinned); onPinnedChanged?() }
@@ -61,7 +61,6 @@ final class AppModel: ObservableObject {
     // 由 AppDelegate 挂上的副作用。放在这里是为了让「改一个值」和
     // 「窗口跟着变」在同一处发生，而不是散在几个视图的 onChange 里。
     var onModeChanged: (() -> Void)?
-    var onOpacityChanged: (() -> Void)?
     var onPinnedChanged: (() -> Void)?
     var onClickThroughChanged: (() -> Void)?
     var onSettingsChanged: (() -> Void)?

@@ -35,6 +35,49 @@ struct WidgetBackground: NSViewRepresentable {
     func updateNSView(_ v: NSVisualEffectView, context: Context) {}
 }
 
+/// 悬浮窗的底：材质 + 一层「纱」。
+///
+/// **材质是半透明的，所以底色由背后的东西决定，但文字颜色只由主题决定**——这两个
+/// 一旦对不上就是白字白底。实测（深色主题、纯白窗口垫底）：`.hudWindow` 合成出来
+/// 是 `#A8AAAA`，白 100% 的主数字只剩 **2.3:1**，整张卡几乎看不见。反过来浅色主题
+/// 压在纯黑上也只有 4.5:1，8pt 的 `DISK` 那类标签掉到 2.2:1。
+///
+/// 修法和主面板同一条（见 ADR-030 / ADR-031）：在材质**外面**压一层纱，把最终亮度
+/// 钉在「这个主题的文字一定读得清」的区间里。纱不跟着滑杆降——它兜的就是「降到最
+/// 透明时背后那张白纸」。
+struct WidgetSurface: View {
+    var corner: CGFloat
+    /// 滑杆。只作用在材质那层，文字永远是实心的。
+    var opacity: Double
+
+    var body: some View {
+        ZStack {
+            WidgetBackground(corner: corner)
+                .opacity(opacity)
+            veil
+        }
+        .clipShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
+    }
+
+    /// 纱用**叠色**：深色主题压黑、浅色主题压白，强度 0.45。
+    ///
+    /// 试过用 `.blendMode(.darken)` 做「封顶」——语义上更理想（比 cap 亮的地方压下来、
+    /// 已经够暗的地方不动），但**混合模式对 `NSVisualEffectView` 不生效**：垫一张纯蓝
+    /// `#315680` 的窗口，压完 B 通道还是 128，一点没被 cap 到 92。所以只能老老实实叠。
+    ///
+    /// 叠色的代价是本来就暗的地方会再暗一次（纯黑垫底时是 `#131313`），但壁纸透上来
+    /// 的深色是带色相的，玻璃感还在。
+    ///
+    /// 0.45 是量出来的：白底 `#A8AAAA` → `#5E5E5E`，白字 7.0:1、`Ink.tertiary` 3.4:1；
+    /// 再薄一档（0.40）白字只剩 5.7:1，0.35 掉到 5.1:1，离 4.5 太近。
+    private var veil: Color {
+        Color(nsColor: NSColor(name: nil) { appearance in
+            let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            return (isDark ? NSColor.black : NSColor.white).withAlphaComponent(0.45)
+        })
+    }
+}
+
 // MARK: - 卡片形态
 
 struct CardWidget: View {
@@ -62,7 +105,7 @@ struct CardWidget: View {
             footer
         }
         .frame(width: WidgetSize.card.width, height: WidgetSize.card.height)
-        .background(WidgetBackground())
+        .background(WidgetSurface(corner: 14, opacity: model.opacity))
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .strokeBorder(Color.primary.opacity(0.09), lineWidth: 0.8)
@@ -229,7 +272,7 @@ struct BarWidget: View {
             }
         }
         .frame(width: WidgetSize.bar.width, height: WidgetSize.bar.height)
-        .background(WidgetBackground(corner: 11))
+        .background(WidgetSurface(corner: 11, opacity: model.opacity))
         .overlay(
             RoundedRectangle(cornerRadius: 11, style: .continuous)
                 .strokeBorder(Color.primary.opacity(0.09), lineWidth: 0.8)
