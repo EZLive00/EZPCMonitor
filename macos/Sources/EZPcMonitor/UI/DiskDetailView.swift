@@ -338,7 +338,43 @@ struct DiskDetailView: View {
             if let n = h.note, !n.isEmpty {
                 note(n)
             }
+
+            glossary(h)
         }
+    }
+
+    /// 表下面那几行解释。
+    ///
+    /// 「可用备用块 100%｜备注：低于 99% 会报警」——普通用户读到这儿还是懵的：
+    /// 备用块是什么？阈值是及格线还是剩余量？备注列只有 210pt，塞不下完整句子，
+    /// 所以在表下面用整行宽度讲清最容易被误读的三行。
+    ///
+    /// 只解释**这张表里真的有的行**：机械盘走的是 ATA 属性表，里面没有
+    /// 「可用备用块」，给它配一句解释反而添乱。判断靠 `key`，不靠本地化之后的名字。
+    private func glossary(_ h: DiskHealth) -> some View {
+        let keys = Set(h.attrs.map(\.key))
+        let entries = [
+            ("wear", "dd.glossWearTerm", "dd.glossWear"),
+            ("spare", "dd.glossSpareTerm", "dd.glossSpare"),
+            ("media", "dd.glossMediaTerm", "dd.glossMedia"),
+        ].filter { keys.contains($0.0) }
+
+        return VStack(alignment: .leading, spacing: 4) {
+            Text(i18n.t("dd.glossTitle"))
+                .font(.system(size: 9.5, weight: .semibold))
+                .foregroundStyle(Ink.tertiary)
+                .padding(.bottom, 1)
+
+            ForEach(entries, id: \.0) { e in
+                // 术语用 semibold、解释用常规字重，靠字重而不是颜色区分——
+                // 颜色一多，这一块就比上面的表还热闹。
+                (Text(i18n.t(e.1)).font(.system(size: 10, weight: .semibold))
+                    + Text(" · " + i18n.t(e.2)).font(.system(size: 10)))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.top, 10)
     }
 
     private func attrRow(_ a: SmartAttr) -> some View {
@@ -387,13 +423,15 @@ struct DiskDetailView: View {
     }
 
     private var footer: some View {
+        // 「介质错误、备用块这类已经发生的计数更值得关注」原来接在这一行后面，
+        // 现在表下面有了逐条解释，那句话就只是重复；而且它一长，法语的页脚
+        // 会被 `lineLimit(1)` 截掉半句。
         HStack(spacing: 4) {
             Text(i18n.t("dd.footSource", ["v": health?.source ?? "—"]))
             Text("·")
             Text(i18n.t("dd.footWarnLead"))
             Text(i18n.t("dd.footWarnBold"))
                 .fontWeight(.semibold)
-            Text(i18n.t("dd.footWarn"))
             Spacer()
         }
         .font(.system(size: 9.5))

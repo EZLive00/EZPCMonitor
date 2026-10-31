@@ -274,13 +274,18 @@ struct Leaders: Decodable {
 // MARK: - 硬盘健康
 
 struct SmartAttr: Decodable, Identifiable {
+    /// 稳定的机器标识（`spare` / `media` / `ata.5` …）。
+    ///
+    /// 用它当 `id` 而不是 `name + value + extra`：那个组合里带了**数值**，
+    /// 盘一写数据整行的身份就变了，`ForEach` 会当成新行重建。
+    let key: String
     let name: String
     let value: String
     let extra: String
     /// 需要留意（低于阈值 / 关键计数非零）
     let critical: Bool
 
-    var id: String { name + value + extra }
+    var id: String { key }
 }
 
 struct DiskHealth: Decodable, Identifiable {

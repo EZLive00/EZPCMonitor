@@ -63,6 +63,11 @@ pub struct DiskHealth {
 #[derive(Serialize, Clone, Debug, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct SmartAttr {
+    /// 稳定的机器标识（`spare` / `media` / `ata.5` …）。
+    ///
+    /// 界面靠它决定「这一行要不要配一句解释」，而不是去猜本地化之后的名字——
+    /// 名字随语言变，键不变。顺带让 SwiftUI 的 `ForEach` 有了不随数值跳动的 id。
+    pub key: String,
     pub name: String,
     pub value: String,
     pub extra: String,
@@ -422,8 +427,9 @@ fn apply_smart(v: &serde_json::Value, h: &mut DiskHealth) {
 /// NVMe 健康日志 → 属性表。顺序按「先看要紧的」排，和 CrystalDiskInfo 一致。
 fn nvme_rows(log: &serde_json::Value) -> Vec<SmartAttr> {
     let mut out = Vec::new();
-    let mut row = |name: String, value: String, extra: String, critical: bool| {
+    let mut row = |key: &str, name: String, value: String, extra: String, critical: bool| {
         out.push(SmartAttr {
+            key: key.to_string(),
             name,
             value,
             extra,
@@ -434,6 +440,7 @@ fn nvme_rows(log: &serde_json::Value) -> Vec<SmartAttr> {
     if let Some(cw) = log["critical_warning"].as_u64() {
         let bits = critical_warning_text(cw);
         row(
+            "critical",
             l("严重警告", "Critical Warning"),
             if cw == 0 {
                 l("0（正常）", "0 (OK)")
@@ -446,6 +453,7 @@ fn nvme_rows(log: &serde_json::Value) -> Vec<SmartAttr> {
     }
     if let Some(pu) = log["percentage_used"].as_f64() {
         row(
+            "wear",
             l("已用寿命", "Percentage Used"),
             format!("{}%", trim_num(pu)),
             l(
@@ -458,13 +466,16 @@ fn nvme_rows(log: &serde_json::Value) -> Vec<SmartAttr> {
     if let Some(s) = log["available_spare"].as_f64() {
         let thresh = log["available_spare_threshold"].as_f64();
         row(
+            "spare",
             l("可用备用块", "Available Spare"),
             format!("{}%", trim_num(s)),
             thresh
                 .map(|t| {
+                    // 「阈值 99%」这四个字对普通用户等于没说：看着像「备用块只剩 99%」。
+                    // 它其实是**报警线**——低于这个数，盘才会自己报严重警告。
                     l(
-                        &format!("阈值 {}%", trim_num(t)),
-                        &format!("threshold {}%", trim_num(t)),
+                        &format!("低于 {}% 会报警", trim_num(t)),
+                        &format!("alarms below {}%", trim_num(t)),
                     )
                 })
                 .unwrap_or_default(),
@@ -473,6 +484,7 @@ fn nvme_rows(log: &serde_json::Value) -> Vec<SmartAttr> {
     }
     if let Some(t) = log["temperature"].as_f64().or_else(|| log["temperature"].as_u64().map(|v| v as f64)) {
         row(
+            "temp",
             l("温度", "Temperature"),
             format!("{} °C", trim_num(t)),
             String::new(),
@@ -481,6 +493,7 @@ fn nvme_rows(log: &serde_json::Value) -> Vec<SmartAttr> {
     }
     if let Some(m) = log["controller_busy_time"].as_u64() {
         row(
+            "busy",
             l("控制器忙时", "Controller Busy Time"),
             l(&format!("{m} 分钟"), &format!("{m} min")),
             String::new(),
@@ -489,6 +502,7 @@ fn nvme_rows(log: &serde_json::Value) -> Vec<SmartAttr> {
     }
     if let Some(c) = log["power_cycles"].as_u64() {
         row(
+            "cycles",
             l("通电次数", "Power Cycles"),
             l(&format!("{c} 次"), &c.to_string()),
             String::new(),
@@ -497,6 +511,7 @@ fn nvme_rows(log: &serde_json::Value) -> Vec<SmartAttr> {
     }
     if let Some(hours) = log["power_on_hours"].as_u64() {
         row(
+            "hours",
             l("通电时间", "Power On Hours"),
             l(&format!("{hours} 小时"), &format!("{hours} h")),
             l(&format!("{} 天", hours / 24), &format!("{} days", hours / 24)),
@@ -505,6 +520,7 @@ fn nvme_rows(log: &serde_json::Value) -> Vec<SmartAttr> {
     }
     if let Some(s) = log["unsafe_shutdowns"].as_u64() {
         row(
+            "unsafe",
             l("异常掉电", "Unsafe Shutdowns"),
             l(&format!("{s} 次"), &s.to_string()),
             String::new(),
@@ -512,10 +528,18 @@ fn nvme_rows(log: &serde_json::Value) -> Vec<SmartAttr> {
         );
     }
     if let Some(e) = log["media_errors"].as_u64() {
-        row(l("介质错误", "Media Errors"), e.to_string(), String::new(), e > 0);
+        row(
+            "media",
+            l("介质错误", "Media Errors"),
+            e.to_string(),
+            // 空着的那一列什么都没说。一句话讲清它是什么：控制器纠不回来的坏块。
+            l("纠不回来的坏块", "unrecoverable bad blocks"),
+            e > 0,
+        );
     }
     if let Some(e) = log["num_err_log_entries"].as_u64() {
         row(
+            "errlog",
             l("错误日志条目", "Error Log Entries"),
             e.to_string(),
             String::new(),
@@ -524,6 +548,7 @@ fn nvme_rows(log: &serde_json::Value) -> Vec<SmartAttr> {
     }
     if let Some(r) = log["host_reads"].as_u64() {
         row(
+            "reads",
             l("主机读命令", "Host Read Commands"),
             l(&format!("{} 次", thousands(r)), &thousands(r)),
             String::new(),
@@ -532,6 +557,7 @@ fn nvme_rows(log: &serde_json::Value) -> Vec<SmartAttr> {
     }
     if let Some(w) = log["host_writes"].as_u64() {
         row(
+            "writes",
             l("主机写命令", "Host Write Commands"),
             l(&format!("{} 次", thousands(w)), &thousands(w)),
             String::new(),
@@ -540,6 +566,7 @@ fn nvme_rows(log: &serde_json::Value) -> Vec<SmartAttr> {
     }
     if let Some(u) = log["data_units_read"].as_u64() {
         row(
+            "readBytes",
             l("累计读取", "Data Units Read"),
             human_bytes(u * 1000 * 512),
             l(
@@ -551,6 +578,7 @@ fn nvme_rows(log: &serde_json::Value) -> Vec<SmartAttr> {
     }
     if let Some(u) = log["data_units_written"].as_u64() {
         row(
+            "writeBytes",
             l("累计写入", "Data Units Written"),
             human_bytes(u * 1000 * 512),
             l(
@@ -599,6 +627,7 @@ fn ata_rows(table: &[serde_json::Value]) -> Vec<SmartAttr> {
             extra.push_str(&l(&format!("原始 {raw}"), &format!("raw {raw}")));
         }
         out.push(SmartAttr {
+            key: format!("ata.{id}"),
             name: if name.is_empty() {
                 l(&format!("属性 {id}"), &format!("Attribute {id}"))
             } else {

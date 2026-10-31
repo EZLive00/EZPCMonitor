@@ -204,10 +204,16 @@ export const strings = {
   "dd.colAttr": "属性",
   "dd.colValue": "值",
   "dd.colNote": "备注",
+  "dd.glossTitle": "怎么读这张表",
+  "dd.glossWearTerm": "已用寿命",
+  "dd.glossWear": "厂家按写入量算的「还能写多久」，不是坏掉的概率。",
+  "dd.glossSpareTerm": "可用备用块",
+  "dd.glossSpare": "出厂预留的替补块，哪块坏了就拿它顶上。100% 表示一个都没用掉；低于备注里那条报警线时，盘会自己报严重警告。",
+  "dd.glossMediaTerm": "介质错误",
+  "dd.glossMedia": "读写时数据对不上、控制器自己纠不回来的次数。0 表示一次都没发生过；不是 0 就先备份。",
   "dd.footSource": "数据来源 {v}",
   "dd.footWarnLead": "磨损是厂商标称耐久度的估算，",
   "dd.footWarnBold": "不代表故障预测",
-  "dd.footWarn": "；介质错误、备用块这类「已经发生」的计数更值得关注。",
 
   // ---------------------------------------------------------------- 磁盘状态
   "ds.good": "正常",
