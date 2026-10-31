@@ -133,6 +133,18 @@ enum Fmt {
 
     static func pct(_ n: Double) -> Double { min(100, max(0, n)) }
 
+    /// IOPS 的千位分隔。
+    ///
+    /// `12116` 和 `12,116` 是同一个数，但前者要数位数才知道是「一万二」还是
+    /// 「十二万」——而这正是这一格唯一要传达的信息。用 `NumberFormatter` 而不是
+    /// 手写逗号：法语的千位分隔符是窄不换行空格，德语是点号。
+    static func iops(_ v: Double) -> String {
+        let f = NumberFormatter()
+        f.numberStyle = .decimal
+        f.maximumFractionDigits = 0
+        return f.string(from: NSNumber(value: v.rounded())) ?? String(format: "%.0f", v)
+    }
+
     static func tempColor(_ t: Double) -> Color {
         if t >= 85 { return Palette.danger }
         if t >= 70 { return Palette.warn }

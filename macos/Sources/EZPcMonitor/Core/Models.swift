@@ -321,6 +321,21 @@ struct BenchResult: Decodable {
     let readMbps: Double
     let writeMs: UInt64
     let readMs: UInt64
+
+    /// 4K 随机读写。**主数字是 IOPS 不是 MB/s**：这一项回答的是「一秒能做多少次
+    /// 4K 的小操作」，换成带宽之后 12 000 IOPS 只剩 47 MB/s，和顺序读的 4 800
+    /// 摆在一起会被读成「随机慢得没救」，其实它们量的根本不是一回事。
+    let randReadIops: Double
+    let randReadMbps: Double
+    let randReadMs: UInt64
+    let randWriteIops: Double
+    let randWriteMbps: Double
+    let randWriteMs: UInt64
+
+    /// 随机块的尺寸（KiB）。4 KiB 是这一行的通用口径，界面上要标出来，
+    /// 否则用户拿 12 000 IOPS 去和别家 64 KiB 的数字比会得出错误结论。
+    let randBlockKb: UInt64
+
     /// 实际写入的临时文件路径，用户有权知道我们把数据写到了哪
     let path: String
     let note: String?

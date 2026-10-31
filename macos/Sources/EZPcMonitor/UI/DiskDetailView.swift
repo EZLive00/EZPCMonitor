@@ -29,9 +29,10 @@ struct DiskDetailView: View {
         disk.total > 0 ? Double(disk.used) / Double(disk.total) * 100 : 0
     }
 
-    /// 测速要写 size*2 出去（含文件系统开销），空间不够就别让用户点了。
+    /// 测速只写一份 `size` 的文件，顺序读和两项随机测试都复用它
+    /// （随机测试不另写数据，见 `core/src/bench.rs`）。留 200 MB 给文件系统开销。
     private var needBytes: UInt64 {
-        size * 1024 * 1024 * 2 + 200 * 1024 * 1024
+        size * 1024 * 1024 + 200 * 1024 * 1024
     }
 
     private var enoughSpace: Bool { disk.free > needBytes }
@@ -50,28 +51,46 @@ struct DiskDetailView: View {
             header
             Hairline().padding(.top, 10)
 
-            // 只有 SMART 属性表滚动，上面的身份行 / 数字块 / 曲线 / 测速固定住。
-            // 整页塞进 ScrollView 的话，滚到属性表第 12 行时「磨损 0%」这种
-            // 一眼就该看到的结论会滚出视野。
-            VStack(alignment: .leading, spacing: 14) {
-                if let health {
+            // 上面这块钉住：身份行、四个数字块、实时曲线。滚到 SMART 第 30 行时
+            // 「磨损 0%」还得在视野里——那是打开这一页唯一必看的东西。
+            if let health {
+                VStack(alignment: .leading, spacing: 14) {
                     metaLine(health)
                     statRow(health)
                     ioSection
-                } else {
-                    Text(i18n.t("dd.smartLoading"))
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
                 }
+                .padding(.top, 14)
 
-                benchSection
-
-                if let health {
-                    smartSection(health)
-                }
+                // 滚动区和上面钉住的部分之间要有一条线：没有它，内容滑到边界上
+                // 会像是被硬切掉的。
+                Hairline()
             }
-            .padding(.vertical, 14)
-            .frame(maxHeight: .infinity, alignment: .top)
+
+            // 测速结果和 SMART 属性表一起滚。
+            //
+            // 原来是「整页钉死 700、只有属性表内部滚」。测速加上随机读写那一行之后
+            // 总高度超了，而且超出的部分**是从顶部裁掉的**：标题和「关闭」按钮
+            // 直接看不见。与其每加一项就去抠十几点高度（SMART 表 200→150、
+            // 曲线 34→30……抠到最后处处是巧合），不如让下半页自己滚。
+            //
+            // 顺手把属性表内部的 ScrollView 也去掉了：嵌在页面滚动里的滚动区，
+            // 滚轮到底该滚谁全看指针在哪，是比多滚两屏更糟的体验。
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    benchSection
+
+                    if let health {
+                        smartSection(health)
+                    } else {
+                        Text(i18n.t("dd.smartLoading"))
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.vertical, 14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .scrollIndicators(.automatic)
 
             Hairline()
             footer
@@ -201,25 +220,63 @@ struct DiskDetailView: View {
             }
 
             if let b = bench {
+                // 一行四个，不是两行两列。
+                //
+                // 两行两列读起来确实更清楚（顺序 / 随机各一行），但这一页的高度是
+                // 定死的 700：多一行 76 的数字块，SMART 表就得让出 50、页脚还是会
+                // 被挤出窗口。而没跑测速时（打开 sheet 最常见的样子）那一行是空的，
+                // 整页会空出一大片。
+                //
+                // 一行的代价只是「顺序和随机看起来并列」，用两件事补回来：
+                // 标签里写明 `4K`，随机那两格的副标题是折算带宽（`38.2 MB/s`）
+                // 而不是同样的 MB/s 大数字——不会有人把 9,775 和 2,798 直接比大小。
                 HStack(spacing: 10) {
                     StatTile(
                         key: i18n.t("dd.seqWrite"),
                         value: String(format: "%.0f", b.writeMbps),
-                        note: "\(b.sizeMb) MB / \(String(format: "%.2f", Double(b.writeMs) / 1000)) s",
+                        note: seqNote(b.sizeMb, b.writeMs),
                         valueColor: Palette.tx,
                         unit: "MB/s"
                     )
                     StatTile(
                         key: i18n.t("dd.seqRead"),
                         value: String(format: "%.0f", b.readMbps),
-                        note: "\(b.sizeMb) MB / \(String(format: "%.2f", Double(b.readMs) / 1000)) s",
+                        note: seqNote(b.sizeMb, b.readMs),
                         valueColor: Palette.rx,
                         unit: "MB/s"
                     )
+                    StatTile(
+                        key: i18n.t("dd.randWrite"),
+                        value: Fmt.iops(b.randWriteIops),
+                        note: randNote(b.randWriteMbps, b.randWriteMs),
+                        valueColor: Palette.tx,
+                        unit: "IOPS"
+                    )
+                    StatTile(
+                        key: i18n.t("dd.randRead"),
+                        value: Fmt.iops(b.randReadIops),
+                        note: randNote(b.randReadMbps, b.randReadMs),
+                        valueColor: Palette.rx,
+                        unit: "IOPS"
+                    )
                 }
+                note(i18n.t("dd.randBlock", ["v": "\(b.randBlockKb)"]))
                 note(i18n.t("dd.benchFile", ["v": b.path]) + (b.note.map { " · \($0)" } ?? ""))
             }
         }
+    }
+
+    private func seqNote(_ mb: UInt64, _ ms: UInt64) -> String {
+        "\(mb) MB / \(String(format: "%.2f", Double(ms) / 1000)) s"
+    }
+
+    /// 随机那两格的副标题：折算带宽 + 时长。
+    ///
+    /// 带宽一定要给——「12 116 IOPS」对不熟悉这一行的人是空的，换成
+    /// 「47.3 MB/s」立刻就知道这一项能干什么。时长也一定要给，它是这个数字
+    /// 有多稳的前提（2.5 秒是我们在 NVMe 和机械盘之间取的折中）。
+    private func randNote(_ mbps: Double, _ ms: UInt64) -> String {
+        "\(String(format: "%.1f", mbps)) MB/s · \(String(format: "%.1f", Double(ms) / 1000)) s"
     }
 
     private func startBench() {
@@ -245,12 +302,9 @@ struct DiskDetailView: View {
     // MARK: SMART
 
     private func smartSection(_ h: DiskHealth) -> some View {
-        // 表格高度算出来而不是靠弹性布局：不同盘的属性条数从 8 到 40 都有，
-        // 让 ScrollView 自己决定高度会让整张 sheet 的高度跟着盘变，
-        // 每次打开都跳一下。这里夹到 240，多出来的部分滚动看。
-        let tableHeight = min(200, CGFloat(h.attrs.count) * 21 + 26)
-
-        return VStack(alignment: .leading, spacing: 6) {
+        // 表格不再自己夹高度：外层页面已经在滚了，属性条数从 8 到 40 都让它自然
+        // 撑开，40 条就滚 40 条——而不是像以前那样在一个 200 高的小窗里翻。
+        VStack(alignment: .leading, spacing: 6) {
             sectionTitle(i18n.t("dd.smart"), tag: i18n.tn("p.attrs", Double(h.attrs.count)))
 
             VStack(spacing: 0) {
@@ -268,15 +322,11 @@ struct DiskDetailView: View {
 
                 Hairline()
 
-                ScrollView {
-                    LazyVStack(spacing: 0) {
-                        ForEach(h.attrs) { a in
-                            attrRow(a)
-                        }
+                LazyVStack(spacing: 0) {
+                    ForEach(h.attrs) { a in
+                        attrRow(a)
                     }
                 }
-                .scrollIndicators(.automatic)
-                .frame(height: tableHeight)
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
